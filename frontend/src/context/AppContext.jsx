@@ -21,7 +21,7 @@ export function AppProvider({ children }) {
   // Events State (with remaining seat tracking)
   const [events, setEvents] = useState(() => {
     try {
-      const saved = localStorage.getItem('campushub_events_v2');
+      const saved = localStorage.getItem('campushub_events_v3');
       return saved ? JSON.parse(saved) : INITIAL_EVENTS;
     } catch {
       return INITIAL_EVENTS;
@@ -71,7 +71,7 @@ export function AppProvider({ children }) {
   }, [user]);
 
   useEffect(() => {
-    localStorage.setItem('campushub_events_v2', JSON.stringify(events));
+    localStorage.setItem('campushub_events_v3', JSON.stringify(events));
   }, [events]);
 
   useEffect(() => {

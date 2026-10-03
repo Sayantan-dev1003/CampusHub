@@ -404,18 +404,19 @@ export default function StorePage() {
 
         .store-card-media {
           position: relative;
-          height: 250px;
-          background: #f7faf8;
+          height: 220px;
+          background: transparent;
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 16px;
+          overflow: hidden;
+          padding: 0;
         }
 
         .store-product-img {
-          max-width: 100%;
-          max-height: 100%;
-          object-fit: contain;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
           transition: transform var(--transition-smooth);
         }
 

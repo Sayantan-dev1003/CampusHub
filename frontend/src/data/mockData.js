@@ -1,11 +1,82 @@
 // CampusHub - Mock Database & Initial Seed Data (Indian Rupees & Authentic College Events)
 
 export const INITIAL_EVENTS = [
+  // ==================== LIVE EVENTS (HAPPENING NOW) ====================
+  {
+    id: 'evt-hackathon-2026',
+    title: 'CampusHub 24-Hour Hackathon & Tech Expo',
+    category: 'Workshops & Tech',
+    timing: 'live',
+    status: 'LIVE',
+    badgeText: '🔴 Live Now',
+    description: '24-hour campus hackathon fostering student software development, IoT prototypes, and AI solutions. Currently in the live prototyping round! Visit the expo floor, test live student projects, or attend mentor code reviews.',
+    date: 'Today • Saturday, April 4, 2026',
+    time: '9:00 AM - 9:00 PM (Ongoing Live)',
+    isoDate: '2026-04-04',
+    venue: 'Student Innovation Center & Computing Lab 4',
+    address: 'Academic Tech Block, 2nd Floor, Campus Center',
+    totalCapacity: 200,
+    remainingSeats: 18,
+    memberPrice: 0.00, // Free for active student members!
+    nonMemberPrice: 199.00,
+    vipPrice: 399.00,
+    featured: true,
+    banner: '/assets/hackathon.jpg',
+    agenda: [
+      { time: '9:00 AM', activity: 'Check-in, Hacker ID Badges & Breakfast' },
+      { time: '10:30 AM', activity: 'Keynote & Problem Statements Announced' },
+      { time: '11:00 AM', activity: '24-Hour Hacking Begins & Mentor Sessions' },
+      { time: '4:00 PM', activity: 'Mid-Way Mentor Checkpoints & Hardware Demos' },
+      { time: '8:00 PM', activity: 'Live Pitching & Audience Choice Voting' }
+    ],
+    perks: [
+      'Access to live expo floor and student demo booths',
+      'Complimentary hacker snack bag and energy drinks',
+      'Official CampusHub Hackathon sticker pack',
+      'Audience voting token for Best Campus App'
+    ]
+  },
+  {
+    id: 'evt-live-blood-camp',
+    title: 'Annual Red Cross Student Blood Donation & Health Camp',
+    category: 'Campus Life & Social',
+    timing: 'live',
+    status: 'LIVE',
+    badgeText: '🔴 Live Now',
+    description: 'Free walk-in health screenings, voluntary blood donation drive, and student volunteer sign-ups organized with the Red Cross Youth Wing. Join your fellow peers in giving back to the community today.',
+    date: 'Today • Saturday, April 4, 2026',
+    time: '10:00 AM - 5:00 PM (Open Walk-in)',
+    isoDate: '2026-04-04',
+    venue: 'University Health Center & Student Plaza',
+    address: 'Main Health Pavilion, Ground Floor, Gate 1',
+    totalCapacity: 150,
+    remainingSeats: 62,
+    memberPrice: 0.00,
+    nonMemberPrice: 0.00,
+    vipPrice: 0.00,
+    featured: true,
+    banner: '/assets/campus_lawn.jpg',
+    agenda: [
+      { time: '10:00 AM', activity: 'Registration & Initial Vitals Screening' },
+      { time: '11:00 AM - 4:00 PM', activity: 'Continuous Donation Sessions with Certified Medical Team' },
+      { time: '4:30 PM', activity: 'Donor Recognition & Volunteer Certificates' }
+    ],
+    perks: [
+      'Free comprehensive health check-up & BMI screening',
+      'Complimentary high-nutrition donor refreshment box',
+      'Official Red Cross donor certificate & donor donor card'
+    ]
+  },
+
+  // ==================== UPCOMING EVENTS ====================
   {
     id: 'evt-cultural-fest-2026',
     title: 'Skyline Annual Cultural Fest & Band Night 2026',
     category: 'Cultural & Music',
-    description: 'The biggest annual university celebration of student talent! Join over 500 college students for a high-octane night of live rock and fusion bands, inter-hostel dance battles, comedy skits, and musical showcases in the University Grand Auditorium.',
+    timing: 'upcoming',
+    status: 'UPCOMING',
+    badgeText: 'Upcoming',
+    description: 'The flagship annual university celebration of student talent! Join over 500 college students for a high-octane night of live rock and fusion bands, inter-hostel dance battles, comedy skits, and musical showcases in the University Grand Auditorium.',
     date: 'Wednesday, April 15, 2026',
     time: '5:30 PM - 10:30 PM',
     isoDate: '2026-04-15',
@@ -16,7 +87,6 @@ export const INITIAL_EVENTS = [
     memberPrice: 149.00,
     nonMemberPrice: 299.00,
     vipPrice: 499.00,
-    status: 'PUBLISHED',
     featured: true,
     banner: '/assets/fest.jpg',
     agenda: [
@@ -33,41 +103,12 @@ export const INITIAL_EVENTS = [
     ]
   },
   {
-    id: 'evt-hackathon-2026',
-    title: 'CampusHub 24-Hour Hackathon & Tech Expo',
-    category: 'Workshops & Tech',
-    description: 'A 24-hour campus hackathon fostering student software development, IoT prototypes, and AI solutions. Form your 4-person team, build impactful campus solutions, attend mentor coding clinics, and pitch to industry judges for ₹50,000 in cash prizes!',
-    date: 'Saturday, April 25, 2026',
-    time: '9:00 AM - Sunday 12:00 PM',
-    isoDate: '2026-04-25',
-    venue: 'Student Innovation Center & Computing Lab 4',
-    address: 'Academic Tech Block, 2nd Floor, Campus Center',
-    totalCapacity: 200,
-    remainingSeats: 38,
-    memberPrice: 0.00, // Free for active student members!
-    nonMemberPrice: 199.00,
-    vipPrice: 399.00,
-    status: 'PUBLISHED',
-    featured: true,
-    banner: '/assets/hackathon.jpg',
-    agenda: [
-      { time: '9:00 AM', activity: 'Check-in, Hacker ID Badges & Breakfast' },
-      { time: '10:30 AM', activity: 'Keynote & Problem Statements Announced' },
-      { time: '11:00 AM', activity: '24-Hour Hacking Begins & Mentor Sessions' },
-      { time: '9:00 PM', activity: 'Midnight Pizza & Mini Gaming Tournament' },
-      { time: '10:00 AM Sun', activity: 'Project Submissions & Live Stage Demos' }
-    ],
-    perks: [
-      'Free meals, energy snacks, and midnight coffee for 24 hours',
-      'Official CampusHub Hackathon sticker pack & participant tee',
-      'Direct interview referrals from partner recruiters',
-      'Verified Certificate of Completion'
-    ]
-  },
-  {
     id: 'evt-lawn-fest-2026',
     title: 'Spring Campus Lawn Fest & Acoustic Jam',
     category: 'Campus Life & Social',
+    timing: 'upcoming',
+    status: 'UPCOMING',
+    badgeText: 'Upcoming',
     description: 'Relax on the sunny college lawn! Enjoy acoustic student performances, explore interactive booths hosted by Dramatics, Music, and Photography societies, savor street food stalls, and celebrate campus life under the open sky.',
     date: 'Friday, May 8, 2026',
     time: '12:00 PM - 6:00 PM',
@@ -79,7 +120,6 @@ export const INITIAL_EVENTS = [
     memberPrice: 49.00,
     nonMemberPrice: 99.00,
     vipPrice: 199.00,
-    status: 'PUBLISHED',
     featured: true,
     banner: '/assets/campus_lawn.jpg',
     agenda: [
@@ -96,8 +136,11 @@ export const INITIAL_EVENTS = [
   },
   {
     id: 'evt-leadership-summit',
-    title: 'Inter-College Student Leadership Summit',
+    title: 'Inter-College Student Leadership & Career Summit',
     category: 'Leadership & Career',
+    timing: 'upcoming',
+    status: 'UPCOMING',
+    badgeText: 'Upcoming',
     description: 'Hands-on practical masterclasses for club presidents, team captains, and aspiring student leaders. Learn budget management, sponsorship pitching, event crowd handling, and career roadmap planning with accomplished alumni.',
     date: 'Saturday, May 16, 2026',
     time: '10:00 AM - 4:00 PM',
@@ -109,7 +152,6 @@ export const INITIAL_EVENTS = [
     memberPrice: 99.00,
     nonMemberPrice: 199.00,
     vipPrice: 349.00,
-    status: 'PUBLISHED',
     featured: false,
     banner: '/assets/fest.jpg',
     agenda: [
@@ -122,6 +164,70 @@ export const INITIAL_EVENTS = [
       'Official Leadership Certificate',
       'Executive networking lunch included',
       'Access to CampusHub society leadership toolkits'
+    ]
+  },
+
+  // ==================== PAST EVENTS (CONCLUDED) ====================
+  {
+    id: 'evt-past-orientation-2026',
+    title: 'Spring Freshers Campus Orientation & Society Fair',
+    category: 'Campus Life & Social',
+    timing: 'past',
+    status: 'PAST',
+    badgeText: 'Concluded',
+    description: 'Semester kickoff event! Over 42 university societies, student clubs, and athletic teams welcomed 850+ new inductees across the central courtyard. Included interactive kiosks, society auditions, and campus walking tours.',
+    date: 'Monday, March 9, 2026',
+    time: '10:00 AM - 4:00 PM',
+    isoDate: '2026-03-09',
+    venue: 'Student Activity Center Plaza',
+    address: 'Student Center Courtyard, North Campus',
+    totalCapacity: 850,
+    remainingSeats: 0,
+    memberPrice: 0.00,
+    nonMemberPrice: 0.00,
+    vipPrice: 0.00,
+    featured: false,
+    banner: '/assets/campus_lawn.jpg',
+    agenda: [
+      { time: '10:00 AM', activity: 'Welcome Address by Student Association President' },
+      { time: '11:00 AM', activity: 'Clubs & Societies Fair Open Exploration' },
+      { time: '2:30 PM', activity: 'Campus Tour & Society Inductions' }
+    ],
+    perks: [
+      'Free Freshers Welcome Welcome Pack',
+      'Campus Society directory map',
+      'Membership signup desk'
+    ]
+  },
+  {
+    id: 'evt-past-sports-meet',
+    title: 'Inter-Branch Cricket & Badminton Championship 2026',
+    category: 'Sports & Wellness',
+    timing: 'past',
+    status: 'PAST',
+    badgeText: 'Concluded',
+    description: 'High-intensity 3-day annual intra-college sports tournament. 16 departmental squads battled across cricket, badminton singles and doubles. Computer Science lifted the 2026 Skyline Rolling Championship trophy.',
+    date: 'February 20 - 22, 2026',
+    time: '9:00 AM - 6:00 PM',
+    isoDate: '2026-02-20',
+    venue: 'North Campus Sports Complex & Oval Ground',
+    address: 'University Stadium Block, East Gate',
+    totalCapacity: 600,
+    remainingSeats: 0,
+    memberPrice: 50.00,
+    nonMemberPrice: 100.00,
+    vipPrice: 150.00,
+    featured: false,
+    banner: '/assets/fest.jpg',
+    agenda: [
+      { time: 'Day 1', activity: 'Preliminary Knockout Cricket Matches & Badminton Heats' },
+      { time: 'Day 2', activity: 'Semi-Finals & Women\'s Badminton Finals' },
+      { time: 'Day 3', activity: 'Grand Cricket Final & Trophy Presentation Ceremony' }
+    ],
+    perks: [
+      'Matchday player jersey and hydration pack',
+      'Access to stadium pavilion seating',
+      'Official championship certificate'
     ]
   }
 ];

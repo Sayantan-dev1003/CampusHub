@@ -33,27 +33,6 @@ export default function Navbar() {
 
   return (
     <header className="navbar-wrapper">
-      {/* Top Banner Notice for Visitor Orientation */}
-      <div className="top-announcement-strip">
-        <div className="container strip-content">
-          <div className="strip-left">
-            <span className="strip-tag">Spring 2026</span>
-            <span>🌿 Welcome to <strong>Skyline Student Association</strong> — Central Operating System</span>
-          </div>
-          <div className="strip-right">
-            {!user ? (
-              <span className="strip-info">
-                ✨ Public Visitor Access • Campus Events & Official Merchandise
-              </span>
-            ) : (
-              <span className="strip-member">
-                ⭐ Welcome, <strong>{user.name}</strong> ({user.role})
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* Main Navigation Bar */}
       <nav className="main-nav">
         <div className="container nav-container">
@@ -128,7 +107,7 @@ export default function Navbar() {
                   onClick={() => handleNav('login')}
                 >
                   <User size={16} />
-                  <span>Student Login</span>
+                  <span>Login</span>
                 </button>
               </div>
             ) : (
@@ -230,7 +209,7 @@ export default function Navbar() {
                     onClick={() => handleNav('login')}
                   >
                     <User size={16} />
-                    <span>Student Login</span>
+                    <span>Login</span>
                   </button>
                 </div>
               ) : (
@@ -263,53 +242,6 @@ export default function Navbar() {
           -webkit-backdrop-filter: blur(16px);
           border-bottom: 1px solid var(--border-light);
           box-shadow: 0 4px 20px rgba(35, 78, 59, 0.04);
-        }
-
-        .top-announcement-strip {
-          background: #ebf6ee;
-          border-bottom: 1px solid #d4ebd9;
-          font-size: 0.8rem;
-          color: var(--text-secondary);
-          padding: 6px 0;
-        }
-
-        .strip-content {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-
-        .strip-left {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .strip-tag {
-          background-color: var(--color-primary);
-          color: white;
-          padding: 2px 7px;
-          border-radius: var(--radius-full);
-          font-weight: 700;
-          font-size: 0.72rem;
-          letter-spacing: 0.03em;
-        }
-
-        .strip-link {
-          font-weight: 600;
-          color: var(--color-primary);
-          cursor: pointer;
-          transition: color var(--transition-fast);
-        }
-
-        .strip-link:hover {
-          text-decoration: underline;
-        }
-
-        .strip-member {
-          color: var(--color-primary-dark);
         }
 
         .main-nav {
@@ -421,11 +353,11 @@ export default function Navbar() {
 
         .cart-btn {
           position: relative;
-          width: 42px;
-          height: 42px;
-          border-radius: 12px;
-          border: 1px solid var(--border-light);
-          background: var(--bg-subtle);
+          width: 36px;
+          height: 36px;
+          border-radius: 8px;
+          border: none;
+          background: transparent;
           color: var(--color-primary-dark);
           display: flex;
           align-items: center;
@@ -435,8 +367,7 @@ export default function Navbar() {
         }
 
         .cart-btn:hover {
-          background: var(--color-pastel-soft);
-          border-color: var(--color-sage);
+          color: var(--color-primary);
           transform: translateY(-2px);
         }
 

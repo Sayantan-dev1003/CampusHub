@@ -2,15 +2,13 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Calendar,
-  Clock,
   MapPin,
   Search,
-  Filter,
   ArrowRight,
   Sparkles,
-  Users,
-  CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Radio,
+  History
 } from 'lucide-react';
 
 export default function EventsPage() {
@@ -18,7 +16,14 @@ export default function EventsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  const categories = ['All', 'Social & Gala', 'Workshops & Tech', 'Leadership & Career', 'Fundraiser & Social'];
+  const categories = [
+    'All',
+    'Workshops & Tech',
+    'Campus Life & Social',
+    'Cultural & Music',
+    'Leadership & Career',
+    'Sports & Wellness'
+  ];
 
   const filteredEvents = events.filter((evt) => {
     const matchesSearch =
@@ -31,6 +36,80 @@ export default function EventsPage() {
     return matchesSearch && matchesCategory;
   });
 
+  // Strictly order events: 1. Live Events, 2. Upcoming Events, 3. Past Events
+  const liveEvents = filteredEvents.filter((evt) => evt.timing === 'live');
+  const upcomingEvents = filteredEvents.filter((evt) => evt.timing === 'upcoming');
+  const pastEvents = filteredEvents.filter((evt) => evt.timing === 'past');
+
+  const renderEventCard = (evt) => {
+    const isLive = evt.timing === 'live';
+    const isPast = evt.timing === 'past';
+    const memberPriceLabel = evt.memberPrice === 0 ? 'FREE' : `₹${evt.memberPrice}`;
+    const nonMemberPriceLabel = evt.nonMemberPrice === 0 ? 'FREE' : `₹${evt.nonMemberPrice}`;
+
+    return (
+      <div key={evt.id} className={`event-pure-card glass-card ${isLive ? 'card-live' : isPast ? 'card-past' : ''}`}>
+
+        {/* Status + Category Badges */}
+        <div className="card-top-strip">
+          <div className="badge-group-left">
+            {isLive && (
+              <span className="badge badge-live">
+                <span className="live-dot-pulse"></span>
+                Live Now
+              </span>
+            )}
+            {!isLive && !isPast && (
+              <span className="badge badge-upcoming">Upcoming</span>
+            )}
+            {isPast && (
+              <span className="badge badge-past">Concluded</span>
+            )}
+            <span className="badge badge-mint">{evt.category}</span>
+          </div>
+        </div>
+
+        {/* Event Title */}
+        <h3 className="event-pure-title">{evt.title}</h3>
+
+        {/* Compact Meta: Date + Venue */}
+        <div className="event-compact-meta">
+          <span className="compact-meta-item">
+            <Calendar size={12} className="meta-icon" />
+            {evt.date}
+          </span>
+          <span className="compact-meta-sep">·</span>
+          <span className="compact-meta-item">
+            <MapPin size={12} className="meta-icon" />
+            {evt.venue}
+          </span>
+        </div>
+
+        {/* Simple Price Tag */}
+        {!isPast ? (
+          <div className="card-price-tag">
+            <span className="price-tag-member">Member: {memberPriceLabel}</span>
+            <span className="price-tag-divider">|</span>
+            <span className="price-tag-public">Public: {nonMemberPriceLabel}</span>
+          </div>
+        ) : (
+          <div className="card-price-tag past-price-tag">
+            <span>Event Completed</span>
+          </div>
+        )}
+
+        {/* Action Button */}
+        <button
+          className={`btn ${isPast ? 'btn-outline' : 'btn-primary'} event-action-btn`}
+          onClick={() => navigate('event-details', { id: evt.id })}
+        >
+          <span>{isLive ? 'View Live & Pass' : isPast ? 'View Recap' : 'View & Register'}</span>
+          <ArrowRight size={14} />
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="events-page fade-in">
       {/* Top Banner Header */}
@@ -40,7 +119,7 @@ export default function EventsPage() {
             <span className="badge badge-mint banner-pill">Public Calendar</span>
             <h1 className="banner-title">Campus Events & Ticket Portal</h1>
             <p className="banner-desc">
-              All events are publicly accessible for visitors and students. Active CampusHub members enjoy guaranteed discounted rates on all tickets!
+              All events are publicly accessible for visitors and students. Explore currently active live events, upcoming semester highlights, and past archives. Active CampusHub members enjoy guaranteed discounted rates on all tickets!
             </p>
           </div>
         </div>
@@ -81,7 +160,7 @@ export default function EventsPage() {
         </div>
       </section>
 
-      {/* Events List / Grid */}
+      {/* Events Sections (Strictly ordered: Live -> Upcoming -> Past) */}
       <section className="events-list-section">
         <div className="container">
           {/* Member Pricing Teaser Banner */}
@@ -100,14 +179,10 @@ export default function EventsPage() {
             </div>
           )}
 
-          <div className="results-count-row">
-            <span>Showing <strong>{filteredEvents.length}</strong> available campus events</span>
-          </div>
-
           {filteredEvents.length === 0 ? (
             <div className="empty-results glass-card">
               <AlertCircle size={36} className="text-sage" />
-              <h3>No events match your criteria</h3>
+              <h3>No events match your search</h3>
               <p>Try searching with another keyword or resetting the category filter.</p>
               <button
                 className="btn btn-secondary btn-sm"
@@ -120,90 +195,66 @@ export default function EventsPage() {
               </button>
             </div>
           ) : (
-            <div className="events-catalog-grid">
-              {filteredEvents.map((evt) => {
-                const percentLeft = Math.round((evt.remainingSeats / evt.totalCapacity) * 100);
-                const isLowSeats = evt.remainingSeats <= 25;
-
-                return (
-                  <div key={evt.id} className="event-item-card glass-card">
-                    <div className="event-item-visual">
-                      <img src={evt.banner || '/assets/fest.jpg'} alt={evt.title} className="item-img" />
-                      <span className="item-category-tag">{evt.category}</span>
-                      <div className="item-capacity-chip">
-                        <Users size={13} />
-                        <span>{evt.remainingSeats} / {evt.totalCapacity} seats</span>
+            <div className="events-ordered-sections">
+              {/* SECTION 1: LIVE EVENTS (FIRST) */}
+              {liveEvents.length > 0 && (
+                <div className="event-group-section">
+                  <div className="group-header-row">
+                    <div className="group-header-title">
+                      <div className="live-header-icon-box">
+                        <Radio size={18} className="live-icon-pulsing" />
                       </div>
+                      <h2>Live Events (Happening Now)</h2>
+                      <span className="badge badge-live-pill">{liveEvents.length} Active Now</span>
                     </div>
-
-                    <div className="event-item-details">
-                      <div className="event-timing-row">
-                        <Calendar size={15} className="text-sage" />
-                        <span>{evt.date}</span>
-                        <span className="dot-sep">•</span>
-                        <Clock size={15} className="text-sage" />
-                        <span>{evt.time}</span>
-                      </div>
-
-                      <h2 className="event-item-title">{evt.title}</h2>
-                      <p className="event-item-description">{evt.description}</p>
-
-                      <div className="event-item-venue">
-                        <MapPin size={15} className="text-muted" />
-                        <span>{evt.venue}</span>
-                      </div>
-
-                      {/* Seat Progress Bar */}
-                      <div className="seat-progress-container">
-                        <div className="seat-progress-header">
-                          <span className="seat-status-text">
-                            {isLowSeats ? (
-                              <strong className="text-warning">🔥 Selling Fast! Only {evt.remainingSeats} seats left</strong>
-                            ) : (
-                              <span>Available capacity</span>
-                            )}
-                          </span>
-                          <span className="seat-percent">{percentLeft}% open</span>
-                        </div>
-                        <div className="seat-progress-track">
-                          <div
-                            className={`seat-progress-bar ${isLowSeats ? 'bar-warning' : 'bar-normal'}`}
-                            style={{ width: `${percentLeft}%` }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      {/* Pricing Comparison */}
-                      <div className="event-pricing-strip">
-                        <div className="pricing-box-item member-highlight">
-                          <span className="pricing-label">Member Price</span>
-                          <span className="pricing-cost">₹{evt.memberPrice.toFixed(2)}</span>
-                          <span className="pricing-savings">Save ₹{(evt.nonMemberPrice - evt.memberPrice).toFixed(2)}</span>
-                        </div>
-
-                        <div className="pricing-divider-line"></div>
-
-                        <div className="pricing-box-item non-member-box">
-                          <span className="pricing-label">Non-Member</span>
-                          <span className="pricing-cost-standard">₹{evt.nonMemberPrice.toFixed(2)}</span>
-                          <span className="pricing-sub">Public Rate</span>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="event-actions-row">
-                        <button
-                          className="btn btn-primary event-view-btn"
-                          onClick={() => navigate('event-details', { id: evt.id })}
-                        >
-                          <span>View Event & Tickets</span>
-                          <ArrowRight size={16} />
-                        </button>
-                      </div>
-                    </div>
+                    <span className="group-subtext">Happening today on campus &bull; Instant check-in open</span>
                   </div>
-                );
-              })}
+
+                  <div className="events-cards-grid">
+                    {liveEvents.map(renderEventCard)}
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION 2: UPCOMING EVENTS (SECOND) */}
+              {upcomingEvents.length > 0 && (
+                <div className="event-group-section">
+                  <div className="group-header-row">
+                    <div className="group-header-title">
+                      <div className="upcoming-header-icon-box">
+                        <Calendar size={18} />
+                      </div>
+                      <h2>Upcoming Campus Events</h2>
+                      <span className="badge badge-mint">{upcomingEvents.length} Scheduled</span>
+                    </div>
+                    <span className="group-subtext">Reserve tickets and secure early-bird member seats</span>
+                  </div>
+
+                  <div className="events-cards-grid">
+                    {upcomingEvents.map(renderEventCard)}
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION 3: PAST EVENTS (LASTLY) */}
+              {pastEvents.length > 0 && (
+                <div className="event-group-section">
+                  <div className="group-header-row">
+                    <div className="group-header-title">
+                      <div className="past-header-icon-box">
+                        <History size={18} />
+                      </div>
+                      <h2>Past Events & Highlights</h2>
+                      <span className="badge badge-past">{pastEvents.length} Concluded</span>
+                    </div>
+                    <span className="group-subtext">Completed campus events and society archives</span>
+                  </div>
+
+                  <div className="events-cards-grid">
+                    {pastEvents.map(renderEventCard)}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -375,211 +426,311 @@ export default function EventsPage() {
           max-width: 440px;
         }
 
-        /* Event Catalog Grid */
-        .events-catalog-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 28px;
-        }
-
-        .event-item-card {
-          background: #ffffff;
-          border-radius: var(--radius-lg);
-          overflow: hidden;
+        /* Ordered Event Sections */
+        .events-ordered-sections {
           display: flex;
           flex-direction: column;
+          gap: 48px;
         }
 
-        .event-item-visual {
-          position: relative;
-          height: 220px;
-          overflow: hidden;
+        .event-group-section {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
         }
 
-        .item-img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform var(--transition-smooth);
+        .group-header-row {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          border-bottom: 2px solid var(--border-light);
+          padding-bottom: 12px;
+          flex-wrap: wrap;
+          gap: 10px;
         }
 
-        .event-item-card:hover .item-img {
-          transform: scale(1.04);
+        .group-header-title {
+          display: flex;
+          align-items: center;
+          gap: 12px;
         }
 
-        .item-category-tag {
-          position: absolute;
-          top: 14px;
-          left: 14px;
-          background: rgba(27, 67, 50, 0.85);
-          color: #ffffff;
-          padding: 4px 12px;
-          border-radius: var(--radius-full);
-          font-size: 0.74rem;
-          font-weight: 700;
-          backdrop-filter: blur(4px);
-        }
-
-        .item-capacity-chip {
-          position: absolute;
-          bottom: 14px;
-          right: 14px;
-          background: rgba(255, 255, 255, 0.94);
+        .group-header-title h2 {
+          font-size: 1.55rem;
           color: var(--color-primary-dark);
-          padding: 5px 12px;
-          border-radius: var(--radius-full);
+          letter-spacing: -0.01em;
+          margin: 0;
+        }
+
+        .live-header-icon-box {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 34px;
+          height: 34px;
+          background: #ebf6ee;
+          color: var(--color-primary);
+          border-radius: var(--radius-sm);
+        }
+
+        .upcoming-header-icon-box {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 34px;
+          height: 34px;
+          background: #ebf6ee;
+          color: var(--color-primary);
+          border-radius: var(--radius-sm);
+        }
+
+        .past-header-icon-box {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 34px;
+          height: 34px;
+          background: #f1f3f2;
+          color: var(--text-muted);
+          border-radius: var(--radius-sm);
+        }
+
+        .group-subtext {
+          font-size: 0.86rem;
+          color: var(--text-muted);
+        }
+
+        .badge-live-pill {
+          background: var(--color-pastel-soft);
+          color: var(--color-primary-dark);
+          font-weight: 700;
+          border: 1px solid var(--border-accent);
           font-size: 0.76rem;
+          padding: 3px 10px;
+          border-radius: var(--radius-full);
+        }
+
+        /* Event Cards Grid (No Images) */
+        .events-cards-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 18px;
+        }
+
+        .event-pure-card {
+          background: #ffffff;
+          border-radius: var(--radius-md);
+          border: 1px solid rgba(82, 183, 136, 0.22);
+          box-shadow: 0 2px 8px rgba(35, 78, 59, 0.04);
+          padding: 14px 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          transition: transform var(--transition-normal), box-shadow var(--transition-normal), border-color var(--transition-normal);
+        }
+
+        .event-pure-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(35, 78, 59, 0.08);
+          border-color: var(--color-primary-light);
+        }
+
+        .event-pure-card.card-live {
+          border-left: 4px solid var(--color-sage);
+          background: linear-gradient(180deg, #f7fbf8 0%, #ffffff 100%);
+        }
+
+        .event-pure-card.card-past {
+          opacity: 0.88;
+          background: #fafcfb;
+          border-color: #dbe5df;
+        }
+
+        .event-pure-card.card-past:hover {
+          opacity: 1;
+        }
+
+        /* Card Top Strip */
+        .card-top-strip {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+
+        .badge-group-left {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+
+        .badge-live {
+          background: var(--color-pastel-soft);
+          color: var(--color-primary-dark);
+          font-weight: 700;
+          font-size: 0.72rem;
+          padding: 3px 9px;
+          border-radius: var(--radius-full);
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          border: 1px solid var(--border-accent);
+        }
+
+        .live-dot-pulse {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: var(--color-primary);
+          box-shadow: 0 0 0 rgba(45, 106, 79, 0.5);
+          animation: pulseGreen 1.8s infinite;
+        }
+
+        @keyframes pulseGreen {
+          0% { box-shadow: 0 0 0 0 rgba(45, 106, 79, 0.7); }
+          70% { box-shadow: 0 0 0 8px rgba(45, 106, 79, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(45, 106, 79, 0); }
+        }
+
+        .badge-upcoming {
+          background: var(--color-pastel-soft);
+          color: var(--color-primary-dark);
+          font-weight: 700;
+          font-size: 0.74rem;
+          padding: 4px 10px;
+          border-radius: var(--radius-full);
+          border: 1px solid var(--border-light);
+        }
+
+        .badge-past {
+          background: #eef1f0;
+          color: var(--text-muted);
+          font-weight: 600;
+          font-size: 0.74rem;
+          padding: 4px 10px;
+          border-radius: var(--radius-full);
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .capacity-chip {
+          background: var(--bg-subtle);
+          color: var(--color-primary-dark);
+          border: 1px solid var(--border-light);
+          padding: 4px 10px;
+          border-radius: var(--radius-full);
+          font-size: 0.75rem;
           font-weight: 700;
           display: flex;
           align-items: center;
           gap: 6px;
-          box-shadow: var(--shadow-sm);
         }
 
-        .event-item-details {
-          padding: 24px;
-          flex: 1;
+        .capacity-chip.past-chip {
+          color: var(--text-muted);
+          background: #f4f6f5;
+        }
+
+        /* Card Content */
+        .card-content-body {
           display: flex;
           flex-direction: column;
+          flex: 1;
         }
 
-        .event-timing-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 0.84rem;
-          color: var(--text-muted);
-          font-weight: 600;
-          margin-bottom: 8px;
-        }
-
-        .event-item-title {
-          font-size: 1.35rem;
+        .event-pure-title {
+          font-size: 0.98rem;
+          font-weight: 700;
           color: var(--color-primary-dark);
-          margin-bottom: 8px;
-          line-height: 1.25;
+          line-height: 1.35;
+          letter-spacing: -0.01em;
+          margin: 0;
         }
 
-        .event-item-description {
-          font-size: 0.88rem;
+        /* Compact meta row */
+        .event-compact-meta {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 6px;
+          font-size: 0.76rem;
           color: var(--text-secondary);
-          line-height: 1.5;
-          margin-bottom: 14px;
-          flex: 1;
         }
 
-        .event-item-venue {
+        .compact-meta-item {
+          display: flex;
+          align-items: center;
+          gap: 3px;
+        }
+
+        .compact-meta-sep {
+          color: var(--border-light);
+          font-size: 0.9rem;
+        }
+
+        .meta-icon {
+          color: var(--color-sage);
+          flex-shrink: 0;
+        }
+
+        /* Simple price tag */
+        .card-price-tag {
           display: flex;
           align-items: center;
           gap: 8px;
-          font-size: 0.84rem;
-          color: var(--text-muted);
-          margin-bottom: 16px;
-        }
-
-        .seat-progress-container {
-          background: var(--bg-subtle);
-          padding: 10px 14px;
-          border-radius: var(--radius-sm);
-          margin-bottom: 16px;
-        }
-
-        .seat-progress-header {
-          display: flex;
-          justify-content: space-between;
           font-size: 0.78rem;
-          margin-bottom: 6px;
-          color: var(--text-secondary);
-        }
-
-        .text-warning {
-          color: #b75e18;
-        }
-
-        .seat-progress-track {
-          width: 100%;
-          height: 6px;
-          background: #e2ede5;
-          border-radius: 99px;
-          overflow: hidden;
-        }
-
-        .seat-progress-bar {
-          height: 100%;
-          border-radius: 99px;
-          transition: width 0.4s ease;
-        }
-
-        .bar-normal {
-          background: var(--color-sage);
-        }
-
-        .bar-warning {
-          background: #e76f51;
-        }
-
-        .event-pricing-strip {
-          display: flex;
-          align-items: center;
           background: #f4fbf6;
-          border: 1px solid var(--border-light);
+          border: 1px solid rgba(82, 183, 136, 0.25);
           border-radius: var(--radius-sm);
-          padding: 10px 16px;
-          margin-bottom: 18px;
+          padding: 6px 10px;
         }
 
-        .pricing-box-item {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-        }
-
-        .pricing-label {
-          font-size: 0.72rem;
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
-          color: var(--text-muted);
-          font-weight: 600;
-        }
-
-        .pricing-cost {
-          font-size: 1.3rem;
-          font-weight: 800;
-          color: var(--color-primary);
-          line-height: 1.1;
-        }
-
-        .pricing-savings {
-          font-size: 0.74rem;
-          color: #2d6a4f;
+        .price-tag-member {
           font-weight: 700;
+          color: var(--color-primary-dark);
         }
 
-        .pricing-divider-line {
-          width: 1px;
-          height: 38px;
-          background: var(--border-light);
-          margin: 0 16px;
+        .price-tag-divider {
+          color: var(--border-light);
+          font-size: 0.85rem;
         }
 
-        .pricing-cost-standard {
-          font-size: 1.15rem;
-          font-weight: 700;
+        .price-tag-public {
           color: var(--text-secondary);
         }
 
-        .pricing-sub {
-          font-size: 0.74rem;
+        .past-price-tag {
+          background: #f5f6f5;
+          border-color: #e2e5e3;
           color: var(--text-muted);
+          font-style: italic;
         }
 
-        .event-view-btn {
+        /* Card Action */
+        .event-action-btn {
           width: 100%;
+          padding: 9px 14px;
+          font-size: 0.85rem;
         }
 
-        @media (max-width: 960px) {
-          .events-catalog-grid {
+        @media (max-width: 1100px) {
+          .events-cards-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+
+        @media (max-width: 700px) {
+          .events-cards-grid {
             grid-template-columns: 1fr;
+          }
+
+          .group-header-row {
+            flex-direction: column;
+            align-items: flex-start;
           }
         }
       `}</style>

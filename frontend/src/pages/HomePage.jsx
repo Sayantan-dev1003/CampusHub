@@ -14,8 +14,7 @@ import {
   TrendingUp,
   Award,
   Bell,
-  HeartHandshake,
-  User
+  HeartHandshake
 } from 'lucide-react';
 import { MEMBERSHIP_BENEFITS, INITIAL_ANNOUNCEMENTS } from '../data/mockData';
 
@@ -64,15 +63,6 @@ export default function HomePage() {
                 <span>View Merchandise</span>
               </button>
 
-              {!user && (
-                <button
-                  className="btn btn-outline btn-lg"
-                  onClick={() => navigate('login')}
-                >
-                  <User size={18} />
-                  <span>Student Login</span>
-                </button>
-              )}
             </div>
 
             {/* Trust Points */}
@@ -92,45 +82,14 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Hero Visual Card / Showcase */}
+          {/* Hero Visual: Only Image Container */}
           <div className="hero-visual">
-            <div className="hero-card-stack">
-              <div className="hero-main-card glass-card">
-                <div className="hero-card-badge">
-                  <span className="badge badge-mint">Annual College Fest</span>
-                  <span className="badge badge-member">142 Seats Left</span>
-                </div>
-                <img
-                  src="/assets/fest.jpg"
-                  alt="Annual Cultural Fest Preview"
-                  className="hero-card-img"
-                />
-                <div className="hero-card-details">
-                  <h3>Skyline Annual Cultural Fest & Band Night 2026</h3>
-                  <div className="hero-card-meta">
-                    <span><Calendar size={13} /> Apr 15 • Main Auditorium</span>
-                    <span className="price-tag-highlight">Member: ₹149.00 <span className="strike">₹299.00</span></span>
-                  </div>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    style={{ width: '100%', marginTop: '10px' }}
-                    onClick={() => navigate('event-details', { id: 'evt-cultural-fest-2026' })}
-                  >
-                    <span>View Event & Reserve Seat</span>
-                    <ArrowRight size={14} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Floating Merch Teaser Card */}
-              <div className="hero-float-card glass-card">
-                <img src="/assets/hoodie.jpg" alt="Collegiate Hoodie" className="float-thumb" />
-                <div className="float-info">
-                  <span className="float-label">Official Apparel</span>
-                  <strong>Pastel Sage Hoodie</strong>
-                  <span className="float-price">₹1,099 Member Price</span>
-                </div>
-              </div>
+            <div className="hero-image-frame">
+              <img
+                src="/assets/fest.jpg"
+                alt="Annual College Cultural Fest"
+                className="hero-fest-photo"
+              />
             </div>
           </div>
         </div>
@@ -208,12 +167,19 @@ export default function HomePage() {
             {featuredEvents.map((evt) => (
               <div key={evt.id} className="event-card glass-card">
                 <div className="event-card-media">
-                  <img src={evt.banner || '/assets/gala.jpg'} alt={evt.title} className="event-img" />
+                  <img src={evt.banner || '/assets/fest.jpg'} alt={evt.title} className="event-img" />
                   <span className="event-category-tag">{evt.category}</span>
-                  <div className="event-seat-indicator">
-                    <span className="seat-pulse"></span>
-                    <span>{evt.remainingSeats} seats available</span>
-                  </div>
+                  {evt.timing === 'live' ? (
+                    <div className="event-seat-indicator live-indicator">
+                      <span className="seat-pulse live-pulse"></span>
+                      <span>🔴 Live Now</span>
+                    </div>
+                  ) : (
+                    <div className="event-seat-indicator">
+                      <span className="seat-pulse"></span>
+                      <span>{evt.remainingSeats} seats available</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="event-card-body">
@@ -237,12 +203,16 @@ export default function HomePage() {
                   <div className="event-pricing-box">
                     <div className="price-item member-price-item">
                       <span className="price-type">Member Rate</span>
-                      <strong className="price-value">₹{evt.memberPrice.toFixed(2)}</strong>
+                      <strong className="price-value">
+                        {evt.memberPrice === 0 ? 'FREE' : `₹${evt.memberPrice.toFixed(2)}`}
+                      </strong>
                     </div>
                     <div className="price-divider"></div>
                     <div className="price-item non-member-price-item">
                       <span className="price-type">Non-Member</span>
-                      <span className="price-value-standard">₹{evt.nonMemberPrice.toFixed(2)}</span>
+                      <span className="price-value-standard">
+                        {evt.nonMemberPrice === 0 ? 'FREE' : `₹${evt.nonMemberPrice.toFixed(2)}`}
+                      </span>
                     </div>
                   </div>
 
@@ -252,7 +222,7 @@ export default function HomePage() {
                       style={{ width: '100%' }}
                       onClick={() => navigate('event-details', { id: evt.id })}
                     >
-                      <span>View Event & Register</span>
+                      <span>{evt.timing === 'live' ? 'View Live Event & Pass' : 'View Event & Reserve'}</span>
                       <ArrowRight size={15} />
                     </button>
                   </div>
@@ -288,18 +258,6 @@ export default function HomePage() {
             ))}
           </div>
 
-          <div className="membership-cta-banner glass-card">
-            <div className="cta-banner-text">
-              <h3>Experience vibrant college campus life</h3>
-              <p>Explore upcoming fests, hackathons, and exclusive student merchandise.</p>
-            </div>
-            <div className="cta-banner-actions">
-              <button className="btn btn-primary btn-lg" onClick={() => navigate('events')}>
-                <span>Browse Campus Events</span>
-                <ArrowRight size={16} />
-              </button>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -514,110 +472,34 @@ export default function HomePage() {
         .hero-visual {
           display: flex;
           justify-content: center;
+          align-items: center;
           position: relative;
         }
 
-        .hero-card-stack {
+        .hero-image-frame {
           position: relative;
           width: 100%;
-          max-width: 440px;
-        }
-
-        .hero-main-card {
-          padding: 16px;
+          max-width: 480px;
+          border-radius: 24px;
           overflow: hidden;
-          border-radius: var(--radius-lg);
           background: #ffffff;
+          padding: 8px;
+          border: 1px solid var(--border-light);
+          box-shadow: 0 20px 40px -15px rgba(35, 78, 59, 0.15), 0 0 0 1px rgba(82, 183, 136, 0.25);
+          transition: transform var(--transition-normal), box-shadow var(--transition-normal);
         }
 
-        .hero-card-badge {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 12px;
+        .hero-image-frame:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 28px 50px -15px rgba(35, 78, 59, 0.22), 0 0 0 1px rgba(82, 183, 136, 0.4);
         }
 
-        .hero-card-img {
+        .hero-fest-photo {
           width: 100%;
-          height: 220px;
+          height: 380px;
           object-fit: cover;
-          border-radius: var(--radius-md);
-        }
-
-        .hero-card-details {
-          padding-top: 14px;
-        }
-
-        .hero-card-details h3 {
-          font-size: 1.15rem;
-          color: var(--color-primary-dark);
-          margin-bottom: 6px;
-        }
-
-        .hero-card-meta {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          font-size: 0.84rem;
-          color: var(--text-muted);
-        }
-
-        .price-tag-highlight {
-          font-weight: 700;
-          color: var(--color-primary);
-        }
-
-        .strike {
-          text-decoration: line-through;
-          color: var(--text-muted);
-          font-weight: 400;
-          font-size: 0.78rem;
-          margin-left: 4px;
-        }
-
-        .hero-float-card {
-          position: absolute;
-          bottom: -24px;
-          left: -20px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px 18px;
-          border-radius: var(--radius-md);
-          background: rgba(255, 255, 255, 0.95);
-          box-shadow: var(--shadow-lg);
-          animation: floatSlow 4s ease-in-out infinite alternate;
-        }
-
-        @keyframes floatSlow {
-          0% { transform: translateY(0); }
-          100% { transform: translateY(-8px); }
-        }
-
-        .float-thumb {
-          width: 50px;
-          height: 50px;
-          border-radius: 8px;
-          object-fit: cover;
-        }
-
-        .float-info {
-          display: flex;
-          flex-direction: column;
-          font-size: 0.82rem;
-        }
-
-        .float-label {
-          font-size: 0.7rem;
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
-          color: var(--color-sage);
-          font-weight: 700;
-        }
-
-        .float-price {
-          color: var(--color-primary);
-          font-weight: 700;
+          border-radius: 18px;
+          display: block;
         }
 
         /* Stats Ribbon */

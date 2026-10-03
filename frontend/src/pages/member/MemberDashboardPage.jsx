@@ -7,11 +7,20 @@ export default function MemberDashboardPage() {
 
   // Mock data for dashboard
   const upcomingEvents = events.slice(0, 3);
-  const announcements = [
-    { id: 1, title: 'Fall Festival Volunteer Signups Open', date: 'Oct 01' },
-    { id: 2, title: 'New Merchandise Arrived in Store', date: 'Sep 28' },
-    { id: 3, title: 'General Body Meeting Rescheduled', date: 'Sep 25' },
-  ];
+  const [announcements, setAnnouncements] = React.useState([]);
+
+  React.useEffect(() => {
+    async function loadAnns() {
+      try {
+        const { api } = await import('../../services/api');
+        const res = await api('/announcements?limit=5');
+        setAnnouncements(res.data || []);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    loadAnns();
+  }, []);
 
   return (
     <MemberLayout>
@@ -150,8 +159,8 @@ export default function MemberDashboardPage() {
               <ul className="announcement-list">
                 {announcements.map((ann) => (
                   <li key={ann.id}>
-                    <div className="anno-date">{ann.date}</div>
-                    <div className="anno-title">{ann.title}</div>
+                    <div className="anno-date">{new Date(ann.publishedAt || ann.createdAt).toLocaleDateString()}</div>
+                    <div className="anno-title">{ann.title} {ann.priority === 'URGENT' && <span style={{color: '#ef4444', fontSize: '0.7rem', fontWeight: 'bold', marginLeft: '4px'}}>URGENT</span>}</div>
                   </li>
                 ))}
               </ul>

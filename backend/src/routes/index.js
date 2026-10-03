@@ -197,6 +197,9 @@ router.post('/announcements/:announcementId/publish', requireAuth, admin, asyncH
 router.post('/announcements/:announcementId/archive', requireAuth, admin, asyncHandler(async (req, res) => {
   sendData(res, await announcements.archive(req.params.announcementId), 'Announcement archived');
 }));
+router.post('/announcements/:announcementId/read', requireAuth, asyncHandler(async (req, res) => {
+  sendData(res, await announcements.markRead(req.params.announcementId, req.user.id), 'Announcement marked as read');
+}));
 
 router.get('/products', optionalAuth, asyncHandler(async (req, res) => {
   const result = await products.listProducts(req.user, req.query);

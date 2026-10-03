@@ -63,6 +63,18 @@ enum AnnouncementStatus {
   ARCHIVED
 }
 
+enum AnnouncementCategory {
+  MEETING
+  DEADLINE
+  EVENT
+  GENERAL
+}
+
+enum AnnouncementPriority {
+  NORMAL
+  URGENT
+}
+
 enum ProductStatus {
   ACTIVE
   ARCHIVED
@@ -207,6 +219,7 @@ model User {
   notifications       Notification[]
   eventsCreated       Event[]        @relation("EventCreator")
   announcements       Announcement[]
+  announcementReads   AnnouncementRead[]
   attendanceRecords   Attendance[]   @relation("AttendanceMember")
   attendanceChecked   Attendance[]   @relation("AttendanceStaff")
   initiativesCreated  Initiative[]
@@ -323,20 +336,39 @@ model Attendance {
 }
 
 model Announcement {
-  id          String                 @id @default(cuid())
-  title       String
-  content     String
-  createdById String                 @map("created_by")
-  audience    AnnouncementAudience
-  status      AnnouncementStatus     @default(DRAFT)
-  publishedAt DateTime?              @map("published_at")
-  createdAt   DateTime               @default(now()) @map("created_at")
-  updatedAt   DateTime               @updatedAt @map("updated_at")
+  id           String                 @id @default(cuid())
+  title        String
+  content      String
+  category     AnnouncementCategory   @default(GENERAL)
+  priority     AnnouncementPriority   @default(NORMAL)
+  createdById  String                 @map("created_by")
+  audience     AnnouncementAudience   @default(MEMBERS)
+  targetYear   String?                @map("target_year")
+  targetBranch String?                @map("target_branch")
+  status       AnnouncementStatus     @default(DRAFT)
+  publishedAt  DateTime?              @map("published_at")
+  createdAt    DateTime               @default(now()) @map("created_at")
+  updatedAt    DateTime               @updatedAt @map("updated_at")
 
-  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy    User               @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  reads        AnnouncementRead[]
 
   @@index([status])
+  @@index([priority])
   @@map("announcements")
+}
+
+model AnnouncementRead {
+  id              String       @id @default(cuid())
+  announcementId  String       @map("announcement_id")
+  userId          String       @map("user_id")
+  readAt          DateTime     @default(now()) @map("read_at")
+
+  announcement    Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@map("announcement_reads")
 }
 
 model Product {

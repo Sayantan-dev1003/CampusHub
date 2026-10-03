@@ -104,7 +104,11 @@ const checkInSchema = z.object({ qrToken: z.string().min(1), eventId: z.string()
 const announcementSchema = z.object({
   title: z.string().trim().min(2).max(160),
   content: z.string().trim().min(1),
-  audience: z.enum(['PUBLIC', 'MEMBERS']),
+  category: z.enum(['MEETING', 'DEADLINE', 'EVENT', 'GENERAL']).optional(),
+  priority: z.enum(['NORMAL', 'URGENT']).optional(),
+  audience: z.enum(['PUBLIC', 'MEMBERS']).default('MEMBERS'),
+  targetYear: z.string().trim().max(10).nullable().optional(),
+  targetBranch: z.string().trim().max(100).nullable().optional(),
 });
 
 const announcementPatchSchema = announcementSchema.partial();

@@ -1,33 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MemberLayout from './MemberLayout';
+import { api } from '../../services/api';
 
 export default function MemberAnnouncementsPage() {
-  const [announcements] = useState([
-    {
-      id: 1,
-      title: 'Spring Gala Registration Opens Today!',
-      content: 'We are thrilled to announce that registration for the annual Spring Gala is now officially open! Members get early access and exclusive discounts. Book your tickets now before they sell out!',
-      date: 'Oct 01, 2026',
-      author: 'Event Committee',
-      category: 'Events'
-    },
-    {
-      id: 2,
-      title: 'New Merchandise In Store',
-      content: 'Our highly anticipated winter collection, including the new CampusHub hoodies and beanies, has arrived. Check out the Merchandise store to grab yours.',
-      date: 'Sep 28, 2026',
-      author: 'Merch Team',
-      category: 'Store'
-    },
-    {
-      id: 3,
-      title: 'Volunteer Meeting Scheduled',
-      content: 'All volunteers for the upcoming Bake Sale fundraiser are required to attend a brief orientation meeting this Friday at 4 PM in Room 102.',
-      date: 'Sep 25, 2026',
-      author: 'Volunteer Coordinator',
-      category: 'Volunteering'
+  const [announcements, setAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await api('/announcements?limit=100');
+        setAnnouncements(res.data || []);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
     }
-  ]);
+    load();
+  }, []);
+
+  const handleRead = async (ann) => {
+    try {
+      await api(`/announcements/${ann.id}/read`, { method: 'POST' });
+    } catch (e) {
+      // ignore
+    }
+  };
 
   return (
     <MemberLayout>
@@ -37,12 +37,23 @@ export default function MemberAnnouncementsPage() {
           <p>Stay up to date with the latest news, updates, and notices.</p>
         </header>
 
+        {loading && <p>Loading announcements...</p>}
+        {error && <p className="error-text">{error}</p>}
+
         <div className="announcements-list">
+          {!loading && announcements.length === 0 && (
+            <div className="dashboard-panel"><p>No announcements available.</p></div>
+          )}
           {announcements.map(item => (
-            <div key={item.id} className="announcement-card dashboard-panel">
+            <div 
+              key={item.id} 
+              className={`announcement-card dashboard-panel ${item.priority === 'URGENT' ? 'urgent-announcement' : ''}`}
+              onClick={() => handleRead(item)}
+            >
+              {item.priority === 'URGENT' && <div className="urgent-badge">URGENT</div>}
               <div className="announcement-header">
                 <h2>{item.title}</h2>
-                <span className="announcement-category">{item.category}</span>
+                <span className="announcement-category">{item.category || 'General'}</span>
               </div>
               
               <div className="announcement-meta">
@@ -53,14 +64,14 @@ export default function MemberAnnouncementsPage() {
                     <line x1="8" y1="2" x2="8" y2="6"/>
                     <line x1="3" y1="10" x2="21" y2="10"/>
                   </svg>
-                  {item.date}
+                  {new Date(item.publishedAt || item.createdAt).toLocaleDateString()}
                 </span>
                 <span className="meta-item">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                     <circle cx="12" cy="7" r="4"/>
                   </svg>
-                  By {item.author}
+                  CampusHub
                 </span>
               </div>
 
@@ -80,6 +91,8 @@ export default function MemberAnnouncementsPage() {
           max-width: 900px;
           margin: 0 auto;
         }
+
+        .error-text { color: #e53e3e; }
 
         .dashboard-header { margin-bottom: 32px; }
         .dashboard-header h1 {
@@ -105,6 +118,32 @@ export default function MemberAnnouncementsPage() {
           padding: 32px;
           box-shadow: 0 4px 12px rgba(20, 53, 40, 0.04);
           border: 1px solid rgba(45, 106, 79, 0.1);
+          position: relative;
+          cursor: pointer;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .dashboard-panel:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(20, 53, 40, 0.08);
+        }
+
+        .urgent-announcement {
+          border-color: #fca5a5;
+          background: #fef2f2;
+        }
+        
+        .urgent-badge {
+          position: absolute;
+          top: -12px;
+          right: 24px;
+          background: #ef4444;
+          color: white;
+          padding: 4px 12px;
+          border-radius: 12px;
+          font-size: 0.75rem;
+          font-weight: bold;
+          text-transform: uppercase;
+          box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
         }
 
         .announcement-header {
@@ -129,6 +168,10 @@ export default function MemberAnnouncementsPage() {
           font-weight: 700;
           white-space: nowrap;
         }
+        .urgent-announcement .announcement-category {
+          background: #fee2e2;
+          color: #b91c1c;
+        }
 
         .announcement-meta {
           display: flex;
@@ -138,6 +181,10 @@ export default function MemberAnnouncementsPage() {
           font-size: 0.9rem;
           font-weight: 500;
         }
+        .urgent-announcement .announcement-meta {
+          color: #9ca3af;
+        }
+        
         .meta-item {
           display: flex;
           align-items: center;
@@ -149,6 +196,10 @@ export default function MemberAnnouncementsPage() {
           line-height: 1.7;
           font-size: 1.05rem;
           margin: 0;
+          white-space: pre-wrap;
+        }
+        .urgent-announcement .announcement-content p {
+          color: #7f1d1d;
         }
       `}</style>
     </MemberLayout>

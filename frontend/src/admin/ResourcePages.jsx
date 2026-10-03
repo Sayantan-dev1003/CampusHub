@@ -735,6 +735,8 @@ export function AnnouncementsPage({ mode }) {
           rows={query.data || []}
           columns={[
             { key: 'title', label: 'Title' },
+            { key: 'category', label: 'Category', render: (row) => row.category || 'General' },
+            { key: 'priority', label: 'Priority', render: (row) => row.priority === 'URGENT' ? <span style={{color: '#ef4444', fontWeight: 'bold'}}>Urgent</span> : 'Normal' },
             { key: 'audience', label: 'Audience' },
             { key: 'status', label: 'Status' },
             { key: 'publishedAt', label: 'Published', render: (row) => whenTime(row.publishedAt) },
@@ -753,7 +755,7 @@ export function AnnouncementsPage({ mode }) {
 
 function AnnouncementForm() {
   const { navigate, addToast } = useApp();
-  const [form, setForm] = useState({ title: '', content: '', audience: 'PUBLIC', publish: true });
+  const [form, setForm] = useState({ title: '', content: '', category: 'GENERAL', priority: 'NORMAL', audience: 'PUBLIC', targetYear: '', targetBranch: '', publish: true });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const submit = async (event) => {
@@ -763,7 +765,15 @@ function AnnouncementForm() {
     try {
       const created = await api('/announcements', {
         method: 'POST',
-        body: { title: form.title.trim(), content: form.content.trim(), audience: form.audience },
+        body: { 
+          title: form.title.trim(), 
+          content: form.content.trim(), 
+          category: form.category, 
+          priority: form.priority, 
+          audience: form.audience,
+          targetYear: form.targetYear.trim() || undefined,
+          targetBranch: form.targetBranch.trim() || undefined 
+        },
       });
       if (form.publish) await api(`/announcements/${created.data.id}/publish`, { method: 'POST' });
       addToast('Announcement saved', form.title, 'success');
@@ -779,12 +789,34 @@ function AnnouncementForm() {
       <form className="desk-form" onSubmit={submit}>
         <label>Title<input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Enter a title" /></label>
         <label>Message<textarea required value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} placeholder="Write the notice" /></label>
+        <div className="form-row">
+          <label>Category
+            <select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>
+              <option value="GENERAL">General</option>
+              <option value="MEETING">Meeting</option>
+              <option value="DEADLINE">Deadline</option>
+              <option value="EVENT">Event</option>
+            </select>
+          </label>
+          <label>Priority
+            <select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>
+              <option value="NORMAL">Normal</option>
+              <option value="URGENT">Urgent</option>
+            </select>
+          </label>
+        </div>
         <label>Audience
           <select value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })}>
             <option value="PUBLIC">Public</option>
             <option value="MEMBERS">Members</option>
           </select>
         </label>
+        {form.audience === 'MEMBERS' && (
+          <div className="form-row">
+            <label>Specific Year (Optional)<input value={form.targetYear} onChange={(event) => setForm({ ...form, targetYear: event.target.value })} placeholder="e.g. 1" /></label>
+            <label>Specific Branch (Optional)<input value={form.targetBranch} onChange={(event) => setForm({ ...form, targetBranch: event.target.value })} placeholder="e.g. CSE" /></label>
+          </div>
+        )}
         <label className="check-line"><input type="checkbox" checked={form.publish} onChange={(event) => setForm({ ...form, publish: event.target.checked })} /> Publish now</label>
         {error && <p className="desk-error">{error}</p>}
         <button className="desk-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save announcement'}</button>

@@ -24,7 +24,26 @@ async function list(userId, query) {
     prisma.notification.count({ where: { userId, isRead: false } }),
     prisma.notification.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
   ]);
-  return { data: rows.map(serialize), meta: { page, limit, total, unread } };
+  const enrichedRows = await Promise.all(rows.map(async (row) => {
+    let extra = {};
+    if (row.referenceType === 'ANNOUNCEMENT' && row.referenceId) {
+      const ann = await prisma.announcement.findUnique({
+        where: { id: row.referenceId },
+        include: { createdBy: { select: { name: true } } }
+      });
+      if (ann) {
+        extra = {
+          priority: ann.priority,
+          category: ann.category,
+          publisherName: ann.createdBy?.name || 'Admin',
+          fullContent: ann.content
+        };
+      }
+    }
+    return { ...serialize(row), ...extra };
+  }));
+
+  return { data: enrichedRows, meta: { page, limit, total, unread } };
 }
 
 async function markRead(userId, notificationId) {

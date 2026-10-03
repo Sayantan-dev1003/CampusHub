@@ -8,7 +8,11 @@ function serialize(announcement) {
     id: announcement.id,
     title: announcement.title,
     content: announcement.content,
+    category: announcement.category,
+    priority: announcement.priority,
     audience: announcement.audience,
+    targetYear: announcement.targetYear,
+    targetBranch: announcement.targetBranch,
     status: announcement.status,
     publishedAt: announcement.publishedAt,
     createdById: announcement.createdById,
@@ -25,9 +29,20 @@ async function list(user, query) {
     if (query.audience) where.audience = query.audience;
   } else if (user) {
     where.status = 'PUBLISHED';
-    where.OR = [{ audience: 'PUBLIC' }, { audience: 'MEMBERS' }];
-    if (query.audience === 'PUBLIC') where.OR = undefined;
-    if (query.audience === 'PUBLIC') where.audience = 'PUBLIC';
+    where.OR = [
+      { audience: 'PUBLIC' },
+      {
+        audience: 'MEMBERS',
+        AND: [
+          { OR: [{ targetYear: null }, { targetYear: user.year }] },
+          { OR: [{ targetBranch: null }, { targetBranch: user.branch }] }
+        ]
+      }
+    ];
+    if (query.audience === 'PUBLIC') {
+      where.OR = undefined;
+      where.audience = 'PUBLIC';
+    }
   } else {
     where.status = 'PUBLISHED';
     where.audience = 'PUBLIC';
@@ -50,7 +65,11 @@ async function create(userId, input) {
     data: {
       title: input.title,
       content: input.content,
-      audience: input.audience,
+      category: input.category || 'GENERAL',
+      priority: input.priority || 'NORMAL',
+      audience: input.audience || 'MEMBERS',
+      targetYear: input.targetYear,
+      targetBranch: input.targetBranch,
       createdById: userId,
       status: 'DRAFT',
     },
@@ -61,9 +80,6 @@ async function create(userId, input) {
 async function update(id, input) {
   const existing = await prisma.announcement.findUnique({ where: { id } });
   if (!existing) throw new ApiError(404, 'Announcement not found', 'NOT_FOUND');
-  if (existing.status === 'PUBLISHED') {
-    throw new ApiError(409, 'Published announcements are archived instead of edited', 'CONFLICT');
-  }
   const row = await prisma.announcement.update({ where: { id }, data: input });
   return serialize(row);
 }
@@ -83,6 +99,8 @@ async function publish(id) {
         where: {
           status: 'ACTIVE',
           memberships: { some: { status: 'ACTIVE', endDate: { gte: new Date() } } },
+          ...(row.targetYear ? { year: row.targetYear } : {}),
+          ...(row.targetBranch ? { branch: row.targetBranch } : {}),
         },
         select: { id: true },
       });
@@ -108,4 +126,24 @@ async function archive(id) {
   return serialize(row);
 }
 
-module.exports = { list, create, update, publish, archive };
+async function markRead(announcementId, userId) {
+  const existing = await prisma.announcement.findUnique({ where: { id: announcementId } });
+  if (!existing) throw new ApiError(404, 'Announcement not found', 'NOT_FOUND');
+  
+  await prisma.announcementRead.upsert({
+    where: {
+      announcementId_userId: {
+        announcementId,
+        userId,
+      }
+    },
+    update: {},
+    create: {
+      announcementId,
+      userId,
+    }
+  });
+  return { success: true };
+}
+
+module.exports = { list, create, update, publish, archive, markRead };

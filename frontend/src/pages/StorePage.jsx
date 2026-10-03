@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { api } from '../services/api';
 import {
   ShoppingBag,
   Search,
@@ -13,26 +14,36 @@ import {
 } from 'lucide-react';
 
 export default function StorePage() {
-  const { products, navigate, user } = useApp();
+  const { navigate, user } = useApp();
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('featured');
 
   const categories = ['All', 'Hoodies & Sweats', 'T-Shirts', 'Bags & Accessories', 'Accessories'];
 
+  useEffect(() => {
+    setLoading(true);
+    api('/products?limit=100')
+      .then(res => setProducts(res.data || []))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
   const filteredProducts = products
     .filter((prod) => {
       const matchesCategory = selectedCategory === 'All' || prod.category === selectedCategory;
       const matchesSearch =
         prod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prod.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        prod.category.toLowerCase().includes(searchQuery.toLowerCase());
+        (prod.description && prod.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (prod.category && prod.category.toLowerCase().includes(searchQuery.toLowerCase()));
       return matchesCategory && matchesSearch;
     })
     .sort((a, b) => {
       if (sortBy === 'price-low') return a.price - b.price;
       if (sortBy === 'price-high') return b.price - a.price;
-      if (sortBy === 'rating') return b.rating - a.rating;
       return 0; // default featured
     });
 
@@ -92,7 +103,6 @@ export default function StorePage() {
                 <option value="featured">Featured Drops</option>
                 <option value="price-low">Price: Low to High</option>
                 <option value="price-high">Price: High to Low</option>
-                <option value="rating">Highest Rated</option>
               </select>
             </div>
           </div>
@@ -108,7 +118,7 @@ export default function StorePage() {
               <Sparkles size={20} className="text-sage" />
               <div>
                 <strong>Skyline Member Privilege: Special Discounts on All Merchandise</strong>
-                <p>Members save up to ₹200 per item automatically applied to orders.</p>
+                <p>Members enjoy exclusive pricing on store products.</p>
               </div>
             </div>
             {!user?.isMember && (
@@ -122,7 +132,11 @@ export default function StorePage() {
             <span>Showing <strong>{filteredProducts.length}</strong> official campus products</span>
           </div>
 
-          {filteredProducts.length === 0 ? (
+          {loading ? (
+            <div className="loading-state glass-card">
+              <h3>Loading Store...</h3>
+            </div>
+          ) : filteredProducts.length === 0 ? (
             <div className="empty-results glass-card">
               <h3>No products found</h3>
               <p>Try clearing your search query or choosing another category.</p>
@@ -139,7 +153,8 @@ export default function StorePage() {
           ) : (
             <div className="store-grid">
               {filteredProducts.map((prod) => {
-                const totalStock = prod.variants.reduce((sum, v) => sum + v.quantity, 0);
+                const variants = prod.variants || [];
+                const totalStock = variants.reduce((sum, v) => sum + v.stockQuantity, 0);
                 const isOutOfStock = totalStock === 0;
                 const isLowStock = totalStock > 0 && totalStock <= 25;
 
@@ -151,10 +166,7 @@ export default function StorePage() {
                   >
                     {/* 1. Product Image */}
                     <div className="store-card-media">
-                      <img src={prod.image} alt={prod.name} className="store-product-img" />
-                      {prod.badge && (
-                        <span className="product-top-badge">{prod.badge}</span>
-                      )}
+                      <img src={prod.imageUrl || "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&q=80"} alt={prod.name} className="store-product-img" />
                       {/* Stock Indicator Badge */}
                       <span
                         className={`stock-indicator-badge ${
@@ -179,25 +191,29 @@ export default function StorePage() {
                       {/* 2. Product Name */}
                       <h3 className="store-product-title">{prod.name}</h3>
 
-                      {/* 3. Price & Member Price */}
-                      <div className="store-pricing-row">
-                        <div className="price-tag-wrap">
-                          <span className="store-main-price">₹{prod.price.toFixed(2)}</span>
-                          <span className="store-member-price">
-                            Member: ₹{prod.memberPrice.toFixed(2)}
-                          </span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px' }}>
+                        {/* 4. Available Sizes */}
+                        <div className="store-sizes-container" style={{ margin: 0 }}>
+                          <span className="sizes-title">Sizes:</span>
+                          <div className="sizes-chip-list">
+                            {variants.map((v) => (
+                              <span key={v.id} className="store-size-chip">
+                                {v.size}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                      </div>
 
-                      {/* 4. Available Sizes */}
-                      <div className="store-sizes-container">
-                        <span className="sizes-title">Available Sizes:</span>
-                        <div className="sizes-chip-list">
-                          {prod.sizes.map((sz) => (
-                            <span key={sz} className="store-size-chip">
-                              {sz}
-                            </span>
-                          ))}
+                        {/* 3. Price & Member Price */}
+                        <div className="store-pricing-row" style={{ margin: 0, textAlign: 'right' }}>
+                          <div className="price-tag-wrap" style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
+                            <span className="store-main-price">₹{prod.price.toFixed(2)}</span>
+                            {prod.memberPrice && prod.memberPrice < prod.price && (
+                              <span className="store-member-price">
+                                Member: ₹{prod.memberPrice.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -444,6 +460,21 @@ export default function StorePage() {
           border-radius: var(--radius-full);
           font-size: 0.72rem;
           font-weight: 700;
+        }
+
+        .badge-outstock {
+          background: #ffe4e6;
+          color: #e11d48;
+        }
+
+        .badge-lowstock {
+          background: #fef3c7;
+          color: #d97706;
+        }
+
+        .badge-instock {
+          background: #dcfce7;
+          color: #166534;
         }
 
         .store-card-body {

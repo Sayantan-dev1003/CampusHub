@@ -38,7 +38,7 @@ export default function CartDrawer() {
           <div className="cart-title-row">
             <ShoppingBag size={20} className="text-sage" />
             <h3 className="cart-title">Your Merchandise Cart</h3>
-            <span className="cart-count-pill">{cart.length}</span>
+            <span className="cart-count-pill">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
           </div>
           <button className="cart-close-btn" onClick={() => setIsCartOpen(false)}>
             <X size={20} />
@@ -73,7 +73,7 @@ export default function CartDrawer() {
                 className="btn btn-primary btn-sm"
                 onClick={() => {
                   setIsCartOpen(false);
-                  navigate('store');
+                  navigate(user ? 'member-store' : 'store');
                 }}
               >
                 Browse Merchandise

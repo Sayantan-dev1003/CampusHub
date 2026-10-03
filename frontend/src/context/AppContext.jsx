@@ -300,8 +300,8 @@ export function AppProvider({ children }) {
 
   const addToCart = (product, size, quantity = 1) => {
     // Check variant stock
-    const variant = product.variants?.find((v) => v.size === size);
-    const availableStock = variant ? variant.quantity : 99;
+    const variant = (product.variants || []).find((v) => v.size === size);
+    const availableStock = variant ? variant.stockQuantity : 99;
 
     setCart((prev) => {
       const existingIndex = prev.findIndex(
@@ -338,8 +338,8 @@ export function AppProvider({ children }) {
     setCart((prev) =>
       prev.map((item) => {
         if (item.product.id === productId && item.size === size) {
-          const variant = item.product.variants?.find((v) => v.size === size);
-          const maxStock = variant ? variant.quantity : 99;
+          const variant = (item.product.variants || []).find((v) => v.size === size);
+          const maxStock = variant ? variant.stockQuantity : 99;
           const safeQty = Math.min(quantity, maxStock);
           return { ...item, quantity: safeQty };
         }
@@ -393,7 +393,7 @@ export function AppProvider({ children }) {
 
   const cartSubtotal = cart.reduce((sum, item) => {
     const isMember = user && user.isMember;
-    const price = isMember ? item.product.memberPrice : item.product.price;
+    const price = isMember ? (item.product.memberPrice || item.product.price) : item.product.price;
     return sum + price * item.quantity;
   }, 0);
 

@@ -125,6 +125,7 @@ const productSchema = z.object({
   description: z.string().trim().min(1),
   category: z.string().trim().min(1).max(80),
   price: z.number().nonnegative(),
+  memberPrice: z.number().nonnegative().optional(),
   imageUrl: z.string().url().optional(),
   status: z.enum(['ACTIVE', 'ARCHIVED']).optional(),
   variants: z.array(variantInput).optional(),

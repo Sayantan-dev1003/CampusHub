@@ -1,51 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api } from '../../services/api';
 import MemberLayout from './MemberLayout';
 
 export default function MemberStorePage() {
-  const { navigate, addToast } = useApp();
+  const { navigate, addToast, cartCount } = useApp();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [products] = useState([
-    {
-      id: 1,
-      name: 'CampusHub Hoodie',
-      price: 799,
-      category: 'Apparel',
-      inStock: 14,
-      image: 'https://via.placeholder.com/400x400/1b4332/ffffff?text=Hoodie',
-      sizes: ['S', 'M', 'L', 'XL']
-    },
-    {
-      id: 2,
-      name: 'Student Association Tee',
-      price: 399,
-      category: 'Apparel',
-      inStock: 50,
-      image: 'https://via.placeholder.com/400x400/2d6a4f/ffffff?text=Tee',
-      sizes: ['S', 'M', 'L', 'XL', 'XXL']
-    },
-    {
-      id: 3,
-      name: 'Logo Coffee Mug',
-      price: 249,
-      category: 'Accessories',
-      inStock: 100,
-      image: 'https://via.placeholder.com/400x400/52b788/ffffff?text=Mug',
-      sizes: ['Standard']
-    },
-    {
-      id: 4,
-      name: 'Classic Snapback Hat',
-      price: 299,
-      category: 'Accessories',
-      inStock: 5,
-      image: 'https://via.placeholder.com/400x400/1b4332/ffffff?text=Hat',
-      sizes: ['One Size']
-    }
-  ]);
+  useEffect(() => {
+    setLoading(true);
+    api('/products?limit=100')
+      .then(res => setProducts(res.data || []))
+      .catch(err => addToast('Error', err.message, 'error'))
+      .finally(() => setLoading(false));
+  }, [addToast]);
 
   const categories = ['All', ...new Set(products.map(p => p.category))];
 
@@ -61,13 +33,17 @@ export default function MemberStorePage() {
     setSelectedSizes(prev => ({ ...prev, [productId]: size }));
   };
 
+  const { addToCart } = useApp();
+
   const handleAddToCart = (product) => {
     const size = selectedSizes[product.id];
-    if (product.sizes.length > 1 && !size) {
+    const variants = product.variants || [];
+    if (variants.length > 1 && !size) {
       addToast('Error', 'Please select a size first.', 'warning');
       return;
     }
-    addToast('Added to Cart', `${product.name} (${size || product.sizes[0]}) added to your cart.`, 'success');
+    const finalSize = size || (variants.length > 0 ? variants[0].size : 'OS');
+    addToCart(product, finalSize, 1);
   };
 
   return (
@@ -85,7 +61,7 @@ export default function MemberStorePage() {
                 <circle cx="20" cy="21" r="1"/>
                 <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
               </svg>
-              View Cart (2)
+              View Cart ({cartCount || 0})
             </button>
           </div>
         </header>
@@ -111,42 +87,61 @@ export default function MemberStorePage() {
           </div>
         </section>
 
-        <div className="products-grid">
-          {filteredProducts.map(product => (
-            <div key={product.id} className="product-card">
-              <div className="product-image" style={{ backgroundImage: `url(${product.image})` }}>
-                {product.inStock < 10 && <span className="stock-badge low-stock">Low Stock: {product.inStock} left</span>}
-              </div>
-              <div className="product-details">
-                <div className="prod-head">
-                  <h3>{product.name}</h3>
-                  <span className="prod-price">₹{product.price}</span>
-                </div>
-                
-                {product.sizes.length > 1 && (
-                  <div className="prod-sizes">
-                    <span className="size-label">Sizes:</span>
-                    <div className="size-options">
-                      {product.sizes.map(size => (
-                        <button 
-                          key={size}
-                          className={`size-btn ${selectedSizes[product.id] === size ? 'selected' : ''}`}
-                          onClick={() => handleSizeSelect(product.id, size)}
-                        >
-                          {size}
-                        </button>
-                      ))}
-                    </div>
+        {loading ? (
+          <p>Loading products...</p>
+        ) : (
+          <div className="products-grid">
+            {filteredProducts.map(product => {
+              const variants = product.variants || [];
+              const totalStock = variants.reduce((sum, v) => sum + v.stockQuantity, 0);
+              return (
+                <div key={product.id} className="product-card" onClick={() => navigate('product-details', { id: product.id })} style={{cursor: 'pointer'}}>
+                  <div className="product-image" style={{ backgroundImage: `url(${product.imageUrl || 'https://via.placeholder.com/400x400/1b4332/ffffff?text=Merchandise'})` }}>
+                    {totalStock < 10 && totalStock > 0 && <span className="stock-badge low-stock">Low Stock: {totalStock} left</span>}
+                    {totalStock === 0 && <span className="stock-badge low-stock" style={{background: '#b71818'}}>Out of stock</span>}
                   </div>
-                )}
-                
-                <button className="btn-primary w-100" onClick={() => handleAddToCart(product)}>
-                  Add to Cart
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+                  <div className="product-details" onClick={(e) => e.stopPropagation()}>
+                    <div className="prod-head">
+                      <h3>{product.name}</h3>
+                    </div>
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px' }}>
+                      {(product.variants || []).length > 0 ? (
+                        <div className="prod-sizes" style={{ marginBottom: 0 }}>
+                          <span className="size-label">Sizes:</span>
+                          <div className="size-options">
+                            {(product.variants || []).map(v => (
+                              <button 
+                                key={v.id}
+                                className={`size-btn ${selectedSizes[product.id] === v.size ? 'selected' : ''}`}
+                                disabled={v.stockQuantity === 0}
+                                onClick={() => handleSizeSelect(product.id, v.size)}
+                                style={{ opacity: v.stockQuantity === 0 ? 0.5 : 1 }}
+                              >
+                                {v.size}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : <div />}
+                      
+                      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end'}}>
+                        <span className="prod-price">₹{product.memberPrice || product.price}</span>
+                        {product.memberPrice && product.memberPrice < product.price && (
+                           <span style={{textDecoration: 'line-through', color: '#888', fontSize: '0.85rem'}}>₹{product.price}</span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <button className="btn-primary w-100" onClick={() => handleAddToCart(product)} disabled={totalStock === 0}>
+                      {totalStock === 0 ? 'Out of Stock' : 'Add to Cart'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <style>{`
@@ -304,7 +299,7 @@ export default function MemberStorePage() {
           cursor: pointer;
           transition: all 0.2s;
         }
-        .size-btn:hover { border-color: #52b788; }
+        .size-btn:hover:not(:disabled) { border-color: #52b788; }
         .size-btn.selected {
           background: #2d6a4f;
           color: #fff;
@@ -320,7 +315,11 @@ export default function MemberStorePage() {
           font-weight: 600;
           cursor: pointer;
         }
-        .btn-primary:hover { background: #1b4332; }
+        .btn-primary:hover:not(:disabled) { background: #1b4332; }
+        .btn-primary:disabled {
+          background: #a9b9b0;
+          cursor: not-allowed;
+        }
         .w-100 { width: 100%; }
 
         @media (max-width: 600px) {

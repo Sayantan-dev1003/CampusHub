@@ -182,7 +182,6 @@ async function createMerchandisePayment(user, items, fulfillment) {
     throw new ApiError(400, 'Delivery is unavailable', 'VALIDATION_ERROR');
   }
   const membership = await currentMembership(user.id);
-  const discountRate = membership ? Number(membership.plan.merchDiscountPercent) / 100 : 0;
   const now = new Date();
   const lines = [];
   let listTotal = 0;
@@ -198,13 +197,17 @@ async function createMerchandisePayment(user, items, fulfillment) {
     if (variant.stockQuantity - held < item.quantity) {
       throw new ApiError(409, 'Insufficient stock', 'OUT_OF_STOCK');
     }
-    const unitPrice = roundMoney(Number(variant.product.price) * (1 - discountRate));
+    const unitPrice = membership && membership.status === 'ACTIVE'
+      ? roundMoney(Number(variant.product.memberPrice) || Number(variant.product.price))
+      : roundMoney(Number(variant.product.price));
     const subtotal = roundMoney(unitPrice * item.quantity);
     listTotal += Number(variant.product.price) * item.quantity;
     lines.push({ variant, quantity: item.quantity, unitPrice, subtotal });
   }
-  const total = roundMoney(lines.reduce((sum, line) => sum + line.subtotal, 0));
-  const discountAmount = roundMoney(listTotal - total);
+  const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.subtotal, 0));
+  const deliveryFee = fulfillment === 'DELIVERY' ? 50 : 0;
+  const total = roundMoney(subtotal + deliveryFee);
+  const discountAmount = roundMoney(listTotal - subtotal);
   const gateway = total > 0 ? await createGatewayOrder(total, settings.currency) : null;
   const holdExpiresAt = addMinutes(now, settings.paymentHoldMinutes);
 

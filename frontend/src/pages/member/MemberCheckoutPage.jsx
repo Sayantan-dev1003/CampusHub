@@ -1,25 +1,72 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api } from '../../services/api';
 import MemberLayout from './MemberLayout';
 
 export default function MemberCheckoutPage() {
-  const { navigate, addToast } = useApp();
+  const { navigate, addToast, cart, updateCartQuantity, clearCart, user } = useApp();
 
-  const [cartItems] = useState([
-    { id: 1, name: 'CampusHub Hoodie', size: 'M', quantity: 1, price: 799 },
-    { id: 2, name: 'Logo Coffee Mug', size: 'Standard', quantity: 1, price: 249 }
-  ]);
-
-  const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const tax = Math.round(subtotal * 0.05); // 5% mock tax
-  const total = subtotal + tax;
-
+  const subtotal = cart.reduce((acc, item) => {
+    const isMember = user && user.isMember;
+    const price = isMember ? (item.product.memberPrice || item.product.price) : item.product.price;
+    return acc + (price * item.quantity);
+  }, 0);
+  
   const [step, setStep] = useState(1); // 1 = Cart, 2 = Checkout, 3 = Confirmation
+  const [fulfillment, setFulfillment] = useState('PICKUP');
+  const deliveryFee = fulfillment === 'DELIVERY' ? 50 : 0;
+  const total = subtotal + deliveryFee;
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [orderId, setOrderId] = useState(null);
 
-  const handleCheckout = (e) => {
+  const handleCheckout = async (e) => {
     e.preventDefault();
-    addToast('Success', 'Payment processed successfully.', 'success');
-    setStep(3);
+    if (cart.length === 0) return;
+    
+    setIsProcessing(true);
+    try {
+      const items = cart.map(item => {
+        const variants = item.product.variants || [];
+        const variant = variants.find(v => v.size === item.size);
+        return { variantId: variant?.id, quantity: item.quantity };
+      }).filter(item => item.variantId);
+
+      const res = await api('/payments/orders', {
+        method: 'POST',
+        body: {
+          purpose: 'ORDER',
+          items,
+          fulfillment
+        }
+      });
+      
+      // If payment is required (not free) and Razorpay is configured, we'd open Razorpay popup here.
+      // For free orders or mock mode, it returns confirmed directly.
+      if (!res.data.confirmed) {
+        await api('/payments/verify', {
+          method: 'POST',
+          body: {
+            razorpayOrderId: res.data.razorpayOrderId,
+            razorpayPaymentId: 'mock_pay_123',
+            razorpaySignature: 'mock_sig_123',
+          },
+        });
+      }
+
+      addToast('Success', 'Order placed successfully.', 'success');
+      setOrderId(res.data.referenceId || res.data.order?.id || 'ORD-' + Math.floor(Math.random() * 10000));
+      clearCart();
+      setStep(3);
+    } catch (err) {
+      addToast('Error', err.message || 'Checkout failed', 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const getPrice = (item) => {
+    const isMember = user && user.isMember;
+    return isMember ? (item.product.memberPrice || item.product.price) : item.product.price;
   };
 
   return (
@@ -29,62 +76,72 @@ export default function MemberCheckoutPage() {
         {step === 1 && (
           <div className="checkout-step">
             <header className="dashboard-header">
-              <button className="btn-back" onClick={() => navigate('store')}>
+              <button className="btn-back" onClick={() => navigate('member-store')}>
                 ← Back to Store
               </button>
               <h1>Your Cart</h1>
             </header>
 
-            <div className="cart-grid">
-              <div className="cart-items dashboard-panel">
-                <table className="cart-table">
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>Size</th>
-                      <th>Quantity</th>
-                      <th>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cartItems.map(item => (
-                      <tr key={item.id}>
-                        <td>
-                          <strong>{item.name}</strong>
-                          <div className="item-price">₹{item.price} each</div>
-                        </td>
-                        <td>{item.size}</td>
-                        <td>
-                          <div className="qty-controls">
-                            <button>-</button>
-                            <input type="number" value={item.quantity} readOnly />
-                            <button>+</button>
-                          </div>
-                        </td>
-                        <td className="item-total">₹{item.price * item.quantity}</td>
+            {cart.length === 0 ? (
+              <div className="dashboard-panel text-center" style={{padding: '60px 20px'}}>
+                <h2>Your cart is empty</h2>
+                <p style={{color: '#5e8070', marginBottom: 24}}>Looks like you haven't added any merchandise to your cart yet.</p>
+                <button className="btn-primary" onClick={() => navigate('member-store')}>Browse Store</button>
+              </div>
+            ) : (
+              <div className="cart-grid">
+                <div className="cart-items dashboard-panel">
+                  <table className="cart-table">
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>Size</th>
+                        <th>Quantity</th>
+                        <th>Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {cart.map((item, idx) => (
+                        <tr key={idx}>
+                          <td>
+                            <strong>{item.product.name}</strong>
+                            <div className="item-price">₹{getPrice(item)} each</div>
+                          </td>
+                          <td>{item.size}</td>
+                          <td>
+                            <div className="qty-controls">
+                              <button onClick={() => updateCartQuantity(item.product.id, item.size, item.quantity - 1)}>-</button>
+                              <input type="number" value={item.quantity} readOnly />
+                              <button onClick={() => updateCartQuantity(item.product.id, item.size, item.quantity + 1)}>+</button>
+                            </div>
+                          </td>
+                          <td className="item-total">₹{getPrice(item) * item.quantity}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              <div className="cart-summary dashboard-panel">
-                <h2>Order Summary</h2>
-                <div className="summary-row">
-                  <span>Subtotal</span>
-                  <span>₹{subtotal}</span>
+                <div className="cart-summary dashboard-panel">
+                  <h2>Order Summary</h2>
+                  <div className="summary-row">
+                    <span>Subtotal</span>
+                    <span>₹{subtotal}</span>
+                  </div>
+                  {fulfillment === 'DELIVERY' && (
+                    <div className="summary-row">
+                      <span>Delivery Fee</span>
+                      <span>₹50</span>
+                    </div>
+                  )}
+                  <div className="summary-row total">
+                    <span>Total</span>
+                    <span>₹{total}</span>
+                  </div>
+                  <button className="btn-primary w-100" onClick={() => setStep(2)}>Proceed to Checkout</button>
                 </div>
-                <div className="summary-row">
-                  <span>Taxes (5%)</span>
-                  <span>₹{tax}</span>
-                </div>
-                <div className="summary-row total">
-                  <span>Total</span>
-                  <span>₹{total}</span>
-                </div>
-                <button className="btn-primary w-100" onClick={() => setStep(2)}>Proceed to Checkout</button>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -103,9 +160,9 @@ export default function MemberCheckoutPage() {
                 
                 <div className="form-group">
                   <label>Delivery Method</label>
-                  <select>
-                    <option>Pick up at Student Association Office (Free)</option>
-                    <option>Deliver to Dormitory Room (+₹50)</option>
+                  <select value={fulfillment} onChange={(e) => setFulfillment(e.target.value)}>
+                    <option value="PICKUP">Pick up at Student Association Office (Free)</option>
+                    <option value="DELIVERY">Deliver to Dormitory Room (+₹50)</option>
                   </select>
                 </div>
                 
@@ -123,19 +180,23 @@ export default function MemberCheckoutPage() {
                   </select>
                 </div>
 
-                <button type="submit" className="btn-primary w-100 mt-4">Confirm & Pay ₹{total}</button>
+                <button type="submit" className="btn-primary w-100 mt-4" disabled={isProcessing}>
+                  {isProcessing ? 'Processing...' : `Confirm & Pay ₹${total}`}
+                </button>
               </form>
 
               <div className="cart-summary dashboard-panel">
                 <h2>Order Summary</h2>
                 <div className="summary-row">
-                  <span>{cartItems.length} Items</span>
+                  <span>{cart.reduce((sum, item) => sum + item.quantity, 0)} Items</span>
                   <span>₹{subtotal}</span>
                 </div>
-                <div className="summary-row">
-                  <span>Taxes</span>
-                  <span>₹{tax}</span>
-                </div>
+                {fulfillment === 'DELIVERY' && (
+                  <div className="summary-row">
+                    <span>Delivery Fee</span>
+                    <span>₹50</span>
+                  </div>
+                )}
                 <div className="summary-row total">
                   <span>Total</span>
                   <span>₹{total}</span>
@@ -153,10 +214,10 @@ export default function MemberCheckoutPage() {
                 <polyline points="22 4 12 14.01 9 11.01"/>
               </svg>
               <h1>Order Confirmed!</h1>
-              <p>Your order <strong>#ORD1024</strong> has been placed successfully.</p>
+              <p>Your order <strong>#{orderId}</strong> has been placed successfully.</p>
               <div className="success-actions">
                 <button className="btn-primary" onClick={() => navigate('member-orders')}>View My Orders</button>
-                <button className="btn-outline" onClick={() => navigate('store')}>Continue Shopping</button>
+                <button className="btn-outline" onClick={() => navigate('member-store')}>Continue Shopping</button>
               </div>
             </div>
           </div>
@@ -305,7 +366,8 @@ export default function MemberCheckoutPage() {
           cursor: pointer;
           font-size: 1.05rem;
         }
-        .btn-primary:hover { background: #1b4332; }
+        .btn-primary:hover:not(:disabled) { background: #1b4332; }
+        .btn-primary:disabled { background: #8aa898; cursor: not-allowed; }
         .w-100 { width: 100%; }
 
         .success-panel {

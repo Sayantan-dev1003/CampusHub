@@ -16,15 +16,40 @@ import {
 } from 'lucide-react';
 
 export default function ProductDetailsPage() {
-  const { currentRoute, navigate, getProduct, products, addToCart, setIsCartOpen, user, addToast } = useApp();
-  const productId = currentRoute.params?.id || 'prod-hoodie';
-  const product = getProduct(productId);
-
-  const [selectedSize, setSelectedSize] = useState(() => {
-    return product?.sizes?.[0] || 'M';
-  });
-
+  const { currentRoute, navigate, products: mockProducts, addToCart, setIsCartOpen, user, addToast } = useApp();
+  const productId = currentRoute.params?.id;
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedSize, setSelectedSize] = useState('OS');
   const [quantity, setQuantity] = useState(1);
+
+  React.useEffect(() => {
+    if (!productId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetch('/api/products/' + productId)
+      .then(res => res.json())
+      .then(res => {
+         if (res.data) {
+           setProduct(res.data);
+           if (res.data.variants && res.data.variants.length > 0) {
+             setSelectedSize(res.data.variants[0].size);
+           }
+         }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [productId]);
+
+  if (loading) {
+    return (
+      <div className="container" style={{ padding: '80px 0', textAlign: 'center' }}>
+        <h2>Loading product...</h2>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -39,7 +64,7 @@ export default function ProductDetailsPage() {
 
   // Get specific stock for selected size variant
   const currentVariant = product.variants?.find((v) => v.size === selectedSize);
-  const sizeStock = currentVariant ? currentVariant.quantity : 0;
+  const sizeStock = currentVariant ? currentVariant.stockQuantity : 0;
   const isSizeOutOfStock = sizeStock <= 0;
   const isSizeLowStock = sizeStock > 0 && sizeStock <= 15;
 
@@ -103,14 +128,14 @@ export default function ProductDetailsPage() {
           {/* Left Column: Product Image Gallery */}
           <div className="product-visual-col">
             <div className="main-image-display glass-card">
-              <img src={product.image} alt={product.name} className="product-hero-image" />
+              <img src={product.imageUrl || 'https://via.placeholder.com/400x400/1b4332/ffffff?text=Merchandise'} alt={product.name} className="product-hero-image" />
               {product.badge && (
                 <span className="badge badge-mint image-badge">{product.badge}</span>
               )}
             </div>
             <div className="image-thumbnails-strip">
               <div className="thumb-item active-thumb">
-                <img src={product.image} alt="Thumbnail 1" />
+                <img src={product.imageUrl || 'https://via.placeholder.com/400x400/1b4332/ffffff?text=Merchandise'} alt="Thumbnail 1" />
               </div>
             </div>
           </div>
@@ -139,17 +164,21 @@ export default function ProductDetailsPage() {
                   <span className="price-label">Public Price</span>
                   <span className="big-price">₹{product.price.toFixed(2)}</span>
                 </div>
-                <div className="price-v-sep"></div>
-                <div className="member-price-wrap">
-                  <div className="member-chip-row">
-                    <span className="price-label">Member Price</span>
-                    <span className="badge badge-mint">Save ₹{(product.price - product.memberPrice).toFixed(0)}</span>
-                  </div>
-                  <span className="member-big-price">₹{product.memberPrice.toFixed(2)}</span>
-                </div>
+                {product.memberPrice && product.memberPrice < product.price && (
+                  <>
+                    <div className="price-v-sep"></div>
+                    <div className="member-price-wrap">
+                      <div className="member-chip-row">
+                        <span className="price-label">Member Price</span>
+                        <span className="badge badge-mint">Save ₹{(product.price - product.memberPrice).toFixed(0)}</span>
+                      </div>
+                      <span className="member-big-price">₹{product.memberPrice.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
-              {!user?.isMember && (
+              {!user?.isMember && product.memberPrice && product.memberPrice < product.price && (
                 <div className="member-savings-tip">
                   <Sparkles size={14} className="text-sage" />
                   <span>
@@ -170,9 +199,9 @@ export default function ProductDetailsPage() {
               </div>
 
               <div className="size-buttons-grid">
-                {product.sizes.map((sz) => {
-                  const variant = product.variants?.find((v) => v.size === sz);
-                  const isAvailable = variant && variant.quantity > 0;
+                {(product.variants || []).map((variant) => {
+                  const sz = variant.size;
+                  const isAvailable = variant.stockQuantity > 0;
                   const isSelected = selectedSize === sz;
 
                   return (
@@ -185,7 +214,7 @@ export default function ProductDetailsPage() {
                     >
                       <span className="sz-letter">{sz}</span>
                       <span className="sz-stock-hint">
-                        {isAvailable ? `${variant.quantity} left` : 'Sold out'}
+                        {isAvailable ? `${variant.stockQuantity} left` : 'Sold out'}
                       </span>
                     </button>
                   );
@@ -312,12 +341,14 @@ export default function ProductDetailsPage() {
                 className="related-card glass-card"
                 onClick={() => navigate('product-details', { id: rel.id })}
               >
-                <img src={rel.image} alt={rel.name} className="rel-img" />
+                <img src={rel.imageUrl || 'https://via.placeholder.com/400x400/1b4332/ffffff?text=Merchandise'} alt={rel.name} className="rel-img" />
                 <div className="rel-info">
                   <h4>{rel.name}</h4>
                   <div className="rel-price-row">
                     <span className="rel-price">₹{rel.price.toFixed(2)}</span>
-                    <span className="rel-member">Member: ₹{rel.memberPrice.toFixed(2)}</span>
+                    {rel.memberPrice && rel.memberPrice < rel.price && (
+                       <span className="rel-member">Member: ₹{rel.memberPrice.toFixed(2)}</span>
+                    )}
                   </div>
                 </div>
               </div>

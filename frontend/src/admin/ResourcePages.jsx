@@ -555,8 +555,17 @@ export function ProductsPage({ mode }) {
             { key: 'name', label: 'Product' },
             { key: 'category', label: 'Category' },
             { key: 'price', label: 'Price', render: (row) => money(row.price) },
+            { key: 'memberPrice', label: 'Member Price', render: (row) => money(row.memberPrice) },
+            { key: 'sizes', label: 'Size', render: (row) => (row.variants || []).map(v => v.size).join(', ') },
             { key: 'stock', label: 'Stock', render: (row) => (row.variants || []).reduce((sum, variant) => sum + variant.stockQuantity, 0) },
             { key: 'status', label: 'Status' },
+            { key: 'updatedAt', label: 'Updated At', render: (row) => {
+                const dates = [row.updatedAt, ...(row.variants || []).map(v => v.updatedAt)].filter(Boolean);
+                if (!dates.length) return '—';
+                const latest = new Date(Math.max(...dates.map(d => new Date(d).getTime())));
+                return latest.toLocaleDateString();
+              } 
+            },
           ]}
         />
       </LoadState>
@@ -566,7 +575,7 @@ export function ProductsPage({ mode }) {
 
 function ProductForm() {
   const { navigate, addToast } = useApp();
-  const [form, setForm] = useState({ name: '', description: '', category: '', price: '', size: 'M', stockQuantity: 0 });
+  const [form, setForm] = useState({ name: '', description: '', category: '', price: '', memberPrice: '', size: 'M', stockQuantity: 0 });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
@@ -582,6 +591,7 @@ function ProductForm() {
           description: form.description.trim(),
           category: form.category.trim(),
           price: Number(form.price),
+          memberPrice: Number(form.memberPrice) || Number(form.price),
           variants: [{ size: form.size.trim() || 'OS', stockQuantity: Number(form.stockQuantity) || 0 }],
         },
       });
@@ -601,6 +611,7 @@ function ProductForm() {
         <div className="form-row">
           <label>Category<input required value={form.category} onChange={set('category')} placeholder="Hoodies" /></label>
           <label>Price<input required type="number" min="0" step="0.01" value={form.price} onChange={set('price')} placeholder="0" /></label>
+          <label>Member Price<input required type="number" min="0" step="0.01" value={form.memberPrice} onChange={set('memberPrice')} placeholder="0" /></label>
         </div>
         <div className="form-row">
           <label>Size<input required value={form.size} onChange={set('size')} placeholder="M" /></label>

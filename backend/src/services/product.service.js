@@ -14,22 +14,22 @@ function serializeVariant(variant) {
     lowStockThreshold: variant.lowStockThreshold,
     sku: variant.sku,
     lowStock: variant.stockQuantity <= variant.lowStockThreshold,
+    updatedAt: variant.updatedAt,
   };
 }
 
 function serializeProduct(product, membership) {
-  const discount = membership ? Number(membership.plan.merchDiscountPercent) : 0;
-  const unit = roundMoney(Number(product.price) * (1 - discount / 100));
   return {
     id: product.id,
     name: product.name,
     description: product.description,
     category: product.category,
     price: money(product.price),
-    viewerPrice: unit,
-    discountPercent: membership ? discount : 0,
+    memberPrice: money(product.memberPrice),
+    viewerPrice: membership && membership.status === 'ACTIVE' ? money(product.memberPrice) : money(product.price),
     imageUrl: product.imageUrl,
     status: product.status,
+    updatedAt: product.updatedAt,
     variants: (product.variants || []).map(serializeVariant),
   };
 }
@@ -75,6 +75,7 @@ async function createProduct(input) {
       description: input.description,
       category: input.category,
       price: input.price,
+      memberPrice: input.memberPrice || input.price,
       imageUrl: input.imageUrl,
       status: input.status || 'ACTIVE',
       variants: input.variants

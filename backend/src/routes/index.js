@@ -24,6 +24,7 @@ const notifications = require('../services/notification.service');
 const search = require('../services/search.service');
 const settings = require('../services/settings.service');
 const uploads = require('../services/upload.service');
+const { setAuthCookie, clearAuthCookie } = require('../lib/authCookie');
 
 const router = express.Router();
 const admin = requireRoles('ADMIN');
@@ -56,10 +57,14 @@ router.get('/health', (req, res) => {
 });
 
 router.post('/auth/register', validateBody(schemas.registerSchema), asyncHandler(async (req, res) => {
-  sendData(res, await auth.register(req.body), 'Account created successfully', 201);
+  const result = await auth.register(req.body);
+  setAuthCookie(res, result.token, true);
+  sendData(res, result, 'Account created successfully', 201);
 }));
 router.post('/auth/login', loginLimiter, validateBody(schemas.loginSchema), asyncHandler(async (req, res) => {
-  sendData(res, await auth.login(req.body), 'Logged in');
+  const result = await auth.login(req.body);
+  setAuthCookie(res, result.token, req.body.remember !== false);
+  sendData(res, result, 'Logged in');
 }));
 router.get('/auth/me', requireAuth, asyncHandler(async (req, res) => {
   sendData(res, await auth.me(req.user.id));
@@ -68,6 +73,7 @@ router.post('/auth/password', requireAuth, validateBody(schemas.passwordSchema),
   sendData(res, await auth.changePassword(req.user.id, req.body), 'Password updated');
 }));
 router.post('/auth/logout', requireAuth, (req, res) => {
+  clearAuthCookie(res);
   sendData(res, { loggedOut: true }, 'Logged out');
 });
 

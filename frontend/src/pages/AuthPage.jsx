@@ -1,854 +1,623 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import {
-  User,
-  Lock,
-  Mail,
-  GraduationCap,
-  Sparkles,
-  Phone,
-  ShieldCheck,
-  CheckCircle2,
-  ArrowRight,
-  Eye,
-  EyeOff,
-  KeyRound
-} from 'lucide-react';
-import { DEMO_USERS } from '../data/mockData';
+
+const ROLES = [
+  { value: 'MEMBER', label: 'Member', note: 'Buy tickets, join events, and shop.' },
+  { value: 'ADMIN', label: 'Admin', note: 'Run events, inventory, and members.' },
+  { value: 'TREASURER', label: 'Treasurer', note: 'Review money, expenses, and reimbursements.' },
+];
+
+const emptySignup = {
+  name: '',
+  email: '',
+  phone: '',
+  studentId: '',
+  role: 'MEMBER',
+  isVolunteer: false,
+  password: '',
+  confirmPassword: '',
+};
 
 export default function AuthPage({ initialMode = 'login' }) {
-  const { currentRoute, navigate, login, registerUser, loginAsDemo, addToast } = useApp();
+  const { currentRoute, navigate, signIn, signUp, addToast } = useApp();
+  const mode = currentRoute.page === 'register' || initialMode === 'register' ? 'register' : 'login';
 
-  const [activeTab, setActiveTab] = useState(
-    currentRoute.page === 'register' ? 'register' : initialMode
-  );
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [form, setForm] = useState(emptySignup);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    if (currentRoute.page === 'register') {
-      setActiveTab('register');
-    } else if (currentRoute.page === 'login') {
-      setActiveTab('login');
-    }
-  }, [currentRoute.page]);
+    setError('');
+  }, [mode]);
 
-  // Login Form States
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
-
-  // Register Form States (Student Details + Account Creation)
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [studentId, setStudentId] = useState('');
-  const [registerEmail, setRegisterEmail] = useState('');
-  const [department, setDepartment] = useState('Computer Science');
-  const [academicYear, setAcademicYear] = useState('Junior (3rd Year)');
-  const [phone, setPhone] = useState('');
-  const [registerPassword, setRegisterPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [selectedPlan, setSelectedPlan] = useState('MEMBER'); // 'MEMBER' ($25) or 'GUEST' ($0)
-
-  // Handle Login
-  const handleLoginSubmit = (e) => {
-    e.preventDefault();
-
-    if (!loginEmail.trim() || !loginPassword.trim()) {
-      addToast('Input Required', 'Please enter your email and password', 'warning');
-      return;
-    }
-
-    // Check if matches known demo or create a session
-    let matchedRole = 'MEMBER';
-    let userName = 'Student Member';
-
-    if (loginEmail.toLowerCase().includes('admin')) {
-      matchedRole = 'ADMIN';
-      userName = 'Administrator';
-    } else if (loginEmail.toLowerCase().includes('treasurer')) {
-      matchedRole = 'TREASURER';
-      userName = 'Treasurer David';
-    } else if (loginEmail.toLowerCase().includes('alice')) {
-      userName = 'Alice Johnson';
-    }
-
-    const loggedUser = {
-      name: userName,
-      email: loginEmail,
-      studentId: 'STU-001',
-      department: 'Computer Science',
-      role: matchedRole,
-      isMember: true,
-      membershipType: 'Standard Active',
-      expiryDate: 'Dec 31, 2026'
-    };
-
-    login(loggedUser);
-    navigate('home');
+  const switchMode = (next) => {
+    setError('');
+    navigate(next);
   };
 
-  // Handle Registration
-  const handleRegisterSubmit = (e) => {
-    e.preventDefault();
-
-    if (!firstName.trim() || !lastName.trim() || !registerEmail.trim() || !registerPassword.trim()) {
-      addToast('Missing Details', 'Please complete all required student fields', 'warning');
-      return;
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      await signIn({ email: email.trim(), password, remember: true });
+    } catch (err) {
+      setError(err.message || 'Could not sign in');
+      addToast('Sign in failed', err.message, 'warning');
+    } finally {
+      setSubmitting(false);
     }
-
-    if (registerPassword !== confirmPassword) {
-      addToast('Password Mismatch', 'Passwords do not match. Please verify.', 'warning');
-      return;
-    }
-
-    const studentRecord = {
-      firstName,
-      lastName,
-      email: registerEmail,
-      studentId: studentId.trim() || `STU-${Math.floor(1000 + Math.random() * 9000)}`,
-      department,
-      year: academicYear,
-      phone,
-      membershipType: selectedPlan === 'MEMBER' ? 'Standard Active (₹299/yr)' : 'Free Visitor Account'
-    };
-
-    registerUser(studentRecord);
   };
+
+  const handleSignup = async (event) => {
+    event.preventDefault();
+    setError('');
+    if (form.password !== form.confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await signUp({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        phone: form.phone.trim() || undefined,
+        studentId: form.studentId.trim() || undefined,
+        role: form.role,
+        isVolunteer: form.role === 'MEMBER' ? form.isVolunteer : false,
+      });
+    } catch (err) {
+      setError(err.message || 'Could not create the account');
+      addToast('Sign up failed', err.message, 'warning');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const selectedRole = ROLES.find((role) => role.value === form.role) || ROLES[0];
 
   return (
-    <div className="auth-page fade-in">
-      <div className="container">
-        <div className="auth-card-wrapper">
-          <div className="auth-card glass-card">
-            {/* Header Tabs */}
-            <div className="auth-tabs">
-              <button
-                type="button"
-                className={`auth-tab-btn ${activeTab === 'login' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab('login');
-                  navigate('login');
-                }}
-              >
-                <User size={18} />
-                <span>Sign In</span>
-              </button>
-
-              <button
-                type="button"
-                className={`auth-tab-btn ${activeTab === 'register' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab('register');
-                  navigate('register');
-                }}
-              >
-                <Sparkles size={18} />
-                <span>Join & Register</span>
-              </button>
-            </div>
-
-            {/* TAB 1: LOGIN */}
-            {activeTab === 'login' ? (
-              <div className="login-tab-content fade-in">
-                <div className="auth-header-text">
-                  <h2>Welcome Back to CampusHub</h2>
-                  <p>Log in with your university credentials or demo test account.</p>
-                </div>
-
-                {/* 1-Click Demo Accounts Strip */}
-                <div className="demo-accounts-box">
-                  <span className="demo-label">✨ Quick 1-Click Demo Credentials:</span>
-                  <div className="demo-btns-grid">
-                    <button
-                      type="button"
-                      className="demo-btn"
-                      onClick={() => loginAsDemo('member')}
-                    >
-                      <strong>Alice Johnson</strong>
-                      <span>Member (STU-001)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="demo-btn"
-                      onClick={() => loginAsDemo('admin')}
-                    >
-                      <strong>Sarah Connor</strong>
-                      <span>Administrator</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="demo-btn"
-                      onClick={() => loginAsDemo('treasurer')}
-                    >
-                      <strong>David Miller</strong>
-                      <span>Treasurer</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="or-divider">
-                  <span>or enter student email</span>
-                </div>
-
-                <form onSubmit={handleLoginSubmit} className="auth-form">
-                  <div className="form-group">
-                    <label>Student / University Email</label>
-                    <div className="input-with-icon">
-                      <Mail size={17} className="input-icon" />
-                      <input
-                        type="email"
-                        required
-                        placeholder="alice@student.edu"
-                        value={loginEmail}
-                        onChange={(e) => setLoginEmail(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <div className="label-with-link">
-                      <label>Password</label>
-                      <button
-                        type="button"
-                        className="inline-link"
-                        onClick={() => addToast('Password Reset', 'Password recovery instructions sent to student email', 'info')}
-                      >
-                        Forgot password?
-                      </button>
-                    </div>
-                    <div className="input-with-icon">
-                      <Lock size={17} className="input-icon" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        placeholder="••••••••"
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="pwd-toggle-btn"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="form-checkbox-row">
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={rememberMe}
-                        onChange={(e) => setRememberMe(e.target.checked)}
-                      />
-                      <span>Keep me signed in on this device</span>
-                    </label>
-                  </div>
-
-                  <button type="submit" className="btn btn-primary btn-lg auth-submit-btn">
-                    <span>Sign In to Account</span>
-                    <ArrowRight size={16} />
-                  </button>
-                </form>
-
-                <div className="auth-footer-prompt">
-                  <span>Don't have an account yet?</span>
-                  <button
-                    className="inline-switch-btn"
-                    onClick={() => {
-                      setActiveTab('register');
-                      navigate('register');
-                    }}
-                  >
-                    Create a Student Account &rarr;
-                  </button>
-                </div>
-              </div>
-            ) : (
-              /* TAB 2: REGISTER (Student Details + Account Creation) */
-              <div className="register-tab-content fade-in">
-                <div className="auth-header-text">
-                  <h2>Create Your Student Account</h2>
-                  <p>Register as a student to unlock member event rates, merchandise discounts, and campus perks.</p>
-                </div>
-
-                <form onSubmit={handleRegisterSubmit} className="auth-form">
-                  {/* Membership Plan Selection */}
-                  <div className="plan-selection-container">
-                    <label className="section-label">Select Membership Plan</label>
-                    <div className="plan-options-grid">
-                      <div
-                        className={`plan-card ${selectedPlan === 'MEMBER' ? 'selected' : ''}`}
-                        onClick={() => setSelectedPlan('MEMBER')}
-                      >
-                        <div className="plan-header">
-                          <span className="plan-title">Annual Student Member</span>
-                          <span className="badge badge-mint">Recommended</span>
-                        </div>
-                        <div className="plan-cost">
-                          <strong>₹299.00</strong>
-                          <span>/ academic year</span>
-                        </div>
-                        <ul className="plan-benefits">
-                          <li><CheckCircle2 size={13} /> Up to 50% Off Fest & Event Tickets</li>
-                          <li><CheckCircle2 size={13} /> Exclusive Member Merch Pricing</li>
-                          <li><CheckCircle2 size={13} /> Digital QR Fast-Track Entry Pass</li>
-                        </ul>
-                      </div>
-
-                      <div
-                        className={`plan-card ${selectedPlan === 'GUEST' ? 'selected' : ''}`}
-                        onClick={() => setSelectedPlan('GUEST')}
-                      >
-                        <div className="plan-header">
-                          <span className="plan-title">Visitor / Guest</span>
-                          <span className="badge badge-subtle">Free</span>
-                        </div>
-                        <div className="plan-cost">
-                          <strong>₹0.00</strong>
-                          <span>/ no dues</span>
-                        </div>
-                        <ul className="plan-benefits">
-                          <li><CheckCircle2 size={13} /> Standard Public Event Pricing</li>
-                          <li><CheckCircle2 size={13} /> Full Storefront Access</li>
-                          <li><CheckCircle2 size={13} /> Upgrade to Member Anytime</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Student Personal Details */}
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>First Name *</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Alice"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>Last Name *</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Johnson"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Student ID Number *</label>
-                      <div className="input-with-icon">
-                        <GraduationCap size={17} className="input-icon" />
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. STU-2026-881"
-                          value={studentId}
-                          onChange={(e) => setStudentId(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Phone Number (Optional)</label>
-                      <div className="input-with-icon">
-                        <Phone size={17} className="input-icon" />
-                        <input
-                          type="tel"
-                          placeholder="+1 (555) 019-2834"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Department & Year */}
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Department / Major *</label>
-                      <select
-                        value={department}
-                        onChange={(e) => setDepartment(e.target.value)}
-                      >
-                        <option value="Computer Science">Computer Science & Software</option>
-                        <option value="Business & Finance">Business & Finance</option>
-                        <option value="Mechanical Engineering">Mechanical Engineering</option>
-                        <option value="Biomedical Sciences">Biomedical Sciences</option>
-                        <option value="Design & Architecture">Design & Architecture</option>
-                        <option value="Political Science & Law">Political Science & Law</option>
-                        <option value="Humanities & Arts">Humanities & Arts</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Academic Standing / Year *</label>
-                      <select
-                        value={academicYear}
-                        onChange={(e) => setAcademicYear(e.target.value)}
-                      >
-                        <option value="Freshman (1st Year)">Freshman (1st Year)</option>
-                        <option value="Sophomore (2nd Year)">Sophomore (2nd Year)</option>
-                        <option value="Junior (3rd Year)">Junior (3rd Year)</option>
-                        <option value="Senior (4th Year)">Senior (4th Year)</option>
-                        <option value="Graduate / Masters">Graduate / Masters</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Email & Passwords */}
-                  <div className="form-group">
-                    <label>University Email *</label>
-                    <div className="input-with-icon">
-                      <Mail size={17} className="input-icon" />
-                      <input
-                        type="email"
-                        required
-                        placeholder="student@university.edu"
-                        value={registerEmail}
-                        onChange={(e) => setRegisterEmail(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Create Password *</label>
-                      <div className="input-with-icon">
-                        <Lock size={17} className="input-icon" />
-                        <input
-                          type="password"
-                          required
-                          placeholder="Min 6 characters"
-                          value={registerPassword}
-                          onChange={(e) => setRegisterPassword(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Confirm Password *</label>
-                      <div className="input-with-icon">
-                        <Lock size={17} className="input-icon" />
-                        <input
-                          type="password"
-                          required
-                          placeholder="Re-enter password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <button type="submit" className="btn btn-primary btn-lg auth-submit-btn">
-                    <Sparkles size={18} />
-                    <span>Create Student Account</span>
-                  </button>
-
-                  <div className="trust-footnote">
-                    <ShieldCheck size={14} className="text-sage" />
-                    <span>Your student information is encrypted and secured by Skyline Student Association.</span>
-                  </div>
-                </form>
-
-                <div className="auth-footer-prompt">
-                  <span>Already an active member?</span>
-                  <button
-                    className="inline-switch-btn"
-                    onClick={() => {
-                      setActiveTab('login');
-                      navigate('login');
-                    }}
-                  >
-                    Log In Here &rarr;
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+    <div className="gate">
+      <section className="gate-panel" aria-hidden="true">
+        <button type="button" className="gate-brand" onClick={() => navigate('home')}>
+          <span className="gate-mark">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+              <path d="m9 10 2 2 4-4" />
+            </svg>
+          </span>
+          <span className="gate-brand-text">
+            <span className="gate-brand-name">CampusHub</span>
+            <span className="gate-brand-sub">Skyline Association</span>
+          </span>
+        </button>
+        <div className="gate-copy">
+          <p className="gate-kicker">Event desk</p>
+          <h1>Tickets, check-in, and the night itself.</h1>
+          <p>Sign in to manage seats, passes, and the people running the event.</p>
         </div>
-      </div>
+        <ul className="gate-points">
+          <li>Published events and seat counts</li>
+          <li>QR tickets at the door</li>
+          <li>Merchandise and volunteer tasks</li>
+        </ul>
+      </section>
+
+      <section className="gate-form">
+        <div className="gate-form-inner">
+          <button type="button" className="gate-back" onClick={() => navigate('home')}>
+            Back to events
+          </button>
+
+          {mode === 'login' ? (
+            <form onSubmit={handleLogin}>
+              <h2>Sign in</h2>
+              <p className="gate-lead">Use the email and password for your CampusHub account.</p>
+
+              <div className="gate-field">
+                <label htmlFor="login-email">Email</label>
+                <input
+                  id="login-email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  placeholder="Enter email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </div>
+
+              <div className="gate-field">
+                <label htmlFor="login-password">Password</label>
+                <input
+                  id="login-password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  placeholder="Enter password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </div>
+
+              {error && <p className="gate-error">{error}</p>}
+
+              <button className="gate-submit" type="submit" disabled={submitting}>
+                {submitting ? 'Signing in…' : 'Sign in'}
+              </button>
+
+              <p className="gate-switch">
+                New here?{' '}
+                <button type="button" onClick={() => switchMode('register')}>
+                  Create an account
+                </button>
+              </p>
+            </form>
+          ) : (
+            <form onSubmit={handleSignup}>
+              <h2>Create an account</h2>
+              <p className="gate-lead">Choose a role. It is saved on your account and controls what you can open.</p>
+
+              <div className="gate-field">
+                <label htmlFor="signup-role">Role</label>
+                <select
+                  id="signup-role"
+                  value={form.role}
+                  onChange={(event) => setForm({ ...form, role: event.target.value })}
+                >
+                  {ROLES.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="gate-hint">{selectedRole.note}</p>
+              </div>
+
+              <div className="gate-field">
+                <label htmlFor="signup-name">Full name</label>
+                <input
+                  id="signup-name"
+                  type="text"
+                  required
+                  minLength={2}
+                  autoComplete="name"
+                  placeholder="Enter full name"
+                  value={form.name}
+                  onChange={(event) => setForm({ ...form, name: event.target.value })}
+                />
+              </div>
+
+              <div className="gate-field">
+                <label htmlFor="signup-email">Email</label>
+                <input
+                  id="signup-email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="Enter email"
+                  value={form.email}
+                  onChange={(event) => setForm({ ...form, email: event.target.value })}
+                />
+              </div>
+
+              <div className="gate-row">
+                <div className="gate-field">
+                  <label htmlFor="signup-phone">Phone</label>
+                  <input
+                    id="signup-phone"
+                    type="tel"
+                    autoComplete="tel"
+                    placeholder="Enter phone number"
+                    value={form.phone}
+                    onChange={(event) => setForm({ ...form, phone: event.target.value })}
+                  />
+                </div>
+                <div className="gate-field">
+                  <label htmlFor="signup-student">Student ID</label>
+                  <input
+                    id="signup-student"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="Enter student ID"
+                    value={form.studentId}
+                    onChange={(event) => setForm({ ...form, studentId: event.target.value })}
+                  />
+                </div>
+              </div>
+
+              {form.role === 'MEMBER' && (
+                <label className="gate-check">
+                  <input
+                    type="checkbox"
+                    checked={form.isVolunteer}
+                    onChange={(event) => setForm({ ...form, isVolunteer: event.target.checked })}
+                  />
+                  I will take volunteer tasks
+                </label>
+              )}
+
+              <div className="gate-row">
+                <div className="gate-field">
+                  <label htmlFor="signup-password">Password</label>
+                  <input
+                    id="signup-password"
+                    type="password"
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    placeholder="Enter password"
+                    value={form.password}
+                    onChange={(event) => setForm({ ...form, password: event.target.value })}
+                  />
+                </div>
+                <div className="gate-field">
+                  <label htmlFor="signup-confirm">Confirm password</label>
+                  <input
+                    id="signup-confirm"
+                    type="password"
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    placeholder="Re-enter password"
+                    value={form.confirmPassword}
+                    onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })}
+                  />
+                </div>
+              </div>
+
+              {error && <p className="gate-error">{error}</p>}
+
+              <button className="gate-submit" type="submit" disabled={submitting}>
+                {submitting ? 'Creating account…' : 'Create account'}
+              </button>
+
+              <p className="gate-switch">
+                Already have an account?{' '}
+                <button type="button" onClick={() => switchMode('login')}>
+                  Sign in
+                </button>
+              </p>
+            </form>
+          )}
+        </div>
+      </section>
 
       <style>{`
-        .auth-page {
-          padding: 48px 0 80px;
-          min-height: calc(100vh - 200px);
-          display: flex;
-          align-items: center;
-        }
-
-        .auth-card-wrapper {
-          max-width: 640px;
-          margin: 0 auto;
-        }
-
-        .auth-card {
-          background: #ffffff;
-          border-radius: var(--radius-lg);
-          padding: 36px 40px;
-          border: 1px solid var(--border-accent);
-          box-shadow: var(--shadow-lg);
-        }
-
-        .auth-tabs {
-          display: flex;
-          background: var(--bg-subtle);
-          padding: 4px;
-          border-radius: var(--radius-sm);
-          margin-bottom: 28px;
-        }
-
-        .auth-tab-btn {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 10px;
-          border-radius: var(--radius-xs);
-          border: none;
-          background: transparent;
-          font-weight: 700;
-          font-size: 0.92rem;
-          color: var(--text-muted);
-          cursor: pointer;
-          transition: all var(--transition-fast);
-        }
-
-        .auth-tab-btn.active {
-          background: #ffffff;
-          color: var(--color-primary-dark);
-          box-shadow: var(--shadow-xs);
-        }
-
-        .auth-header-text {
-          margin-bottom: 24px;
-        }
-
-        .auth-header-text h2 {
-          font-size: 1.85rem;
-          color: var(--color-primary-dark);
-          margin-bottom: 6px;
-        }
-
-        .auth-header-text p {
-          font-size: 0.92rem;
-          color: var(--text-secondary);
-        }
-
-        /* Demo Accounts Box */
-        .demo-accounts-box {
-          background: #f1f8f3;
-          border: 1px solid var(--border-accent);
-          padding: 14px 16px;
-          border-radius: var(--radius-sm);
-          margin-bottom: 20px;
-        }
-
-        .demo-label {
-          font-size: 0.78rem;
-          font-weight: 700;
-          color: var(--color-primary);
-          display: block;
-          margin-bottom: 8px;
-          text-transform: uppercase;
-          letter-spacing: 0.03em;
-        }
-
-        .demo-btns-grid {
+        .gate {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 8px;
+          grid-template-columns: minmax(320px, 0.9fr) 1.1fr;
+          grid-template-rows: minmax(0, 1fr);
+          width: 100%;
+          height: 100%;
+          min-height: 100vh;
+          min-height: 100dvh;
+          background: #eef5f0;
+          font-family: 'Plus Jakarta Sans', var(--font-body);
+          overflow: hidden;
         }
 
-        .demo-btn {
-          background: #ffffff;
-          border: 1px solid var(--border-light);
-          padding: 8px 10px;
-          border-radius: var(--radius-xs);
-          text-align: left;
-          cursor: pointer;
+        .gate-panel {
+          position: relative;
+          overflow: hidden;
+          background:
+            radial-gradient(circle at 18% 12%, rgba(116, 198, 157, 0.28), transparent 34%),
+            linear-gradient(165deg, #245c45 0%, #1b4332 48%, #143528 100%);
+          color: #f4faf6;
+          padding: 28px 44px 24px;
           display: flex;
           flex-direction: column;
-          transition: all var(--transition-fast);
+          justify-content: space-between;
+          gap: 36px;
         }
 
-        .demo-btn:hover {
-          border-color: var(--color-primary);
-          background: #ebf6ee;
-        }
-
-        .demo-btn strong {
-          font-size: 0.82rem;
-          color: var(--color-primary-dark);
-        }
-
-        .demo-btn span {
-          font-size: 0.72rem;
-          color: var(--color-sage);
-        }
-
-        .or-divider {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 20px 0;
-          position: relative;
-        }
-
-        .or-divider::before {
+        .gate-panel::after {
           content: '';
           position: absolute;
-          width: 100%;
-          height: 1px;
-          background: var(--border-light);
+          right: -80px;
+          bottom: -90px;
+          width: 280px;
+          height: 280px;
+          border: 1px solid rgba(183, 228, 199, 0.22);
+          border-radius: 50%;
+          pointer-events: none;
         }
 
-        .or-divider span {
-          background: #ffffff;
-          padding: 0 12px;
+        .gate-brand {
           position: relative;
-          font-size: 0.78rem;
-          color: var(--text-muted);
-        }
-
-        /* Auth Form */
-        .auth-form {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .form-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 16px;
-        }
-
-        .form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .form-group label, .section-label {
-          font-size: 0.82rem;
-          font-weight: 700;
-          color: var(--text-primary);
-        }
-
-        .label-with-link {
-          display: flex;
-          justify-content: space-between;
+          z-index: 1;
+          align-self: flex-start;
+          display: inline-flex;
           align-items: center;
-        }
-
-        .inline-link {
-          background: transparent;
-          border: none;
-          color: var(--color-primary);
-          font-size: 0.78rem;
-          cursor: pointer;
-          font-weight: 600;
-        }
-
-        .inline-link:hover {
-          text-decoration: underline;
-        }
-
-        .input-with-icon {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-
-        .input-icon {
-          position: absolute;
-          left: 12px;
-          color: var(--color-sage);
-        }
-
-        .input-with-icon input {
-          width: 100%;
-          padding: 10px 14px 10px 38px;
-          border-radius: var(--radius-sm);
-          border: 1px solid var(--border-light);
-          font-size: 0.9rem;
-          outline: none;
-        }
-
-        .form-group input, .form-group select {
-          padding: 10px 14px;
-          border-radius: var(--radius-sm);
-          border: 1px solid var(--border-light);
-          font-size: 0.9rem;
-          outline: none;
-        }
-
-        .input-with-icon input:focus, .form-group input:focus, .form-group select:focus {
-          border-color: var(--color-sage);
-        }
-
-        .pwd-toggle-btn {
-          position: absolute;
-          right: 12px;
-          background: transparent;
-          border: none;
-          color: var(--text-muted);
-          cursor: pointer;
-        }
-
-        .form-checkbox-row {
-          display: flex;
-          align-items: center;
-        }
-
-        .checkbox-label {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 0.84rem;
-          color: var(--text-secondary);
-          cursor: pointer;
-        }
-
-        .auth-submit-btn {
-          width: 100%;
-          margin-top: 8px;
-        }
-
-        .auth-footer-prompt {
-          margin-top: 24px;
-          text-align: center;
-          font-size: 0.88rem;
-          color: var(--text-secondary);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-        }
-
-        .inline-switch-btn {
-          background: transparent;
-          border: none;
-          color: var(--color-primary);
-          font-weight: 700;
-          cursor: pointer;
-        }
-
-        .inline-switch-btn:hover {
-          text-decoration: underline;
-        }
-
-        /* Plan Selection */
-        .plan-selection-container {
-          margin-bottom: 8px;
-        }
-
-        .plan-options-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
           gap: 14px;
-          margin-top: 6px;
-        }
-
-        .plan-card {
-          padding: 14px;
-          border: 1.5px solid var(--border-light);
-          border-radius: var(--radius-sm);
+          background: transparent;
+          border: 0;
+          color: #fff;
           cursor: pointer;
-          background: #ffffff;
-          transition: all var(--transition-fast);
+          text-align: left;
         }
 
-        .plan-card.selected {
-          border-color: var(--color-primary);
-          background: #f1f8f3;
+        .gate-mark {
+          width: 52px;
+          height: 52px;
+          border-radius: 14px;
+          display: grid;
+          place-items: center;
+          background: #d8f3dc;
+          color: #1b4332;
+          flex: 0 0 auto;
         }
 
-        .plan-header {
+        .gate-brand-text {
           display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 4px;
+          flex-direction: column;
+          gap: 1px;
         }
 
-        .plan-title {
-          font-size: 0.86rem;
+        .gate-brand-name {
+          font-family: 'Outfit', var(--font-heading);
+          font-size: 1.85rem;
           font-weight: 700;
-          color: var(--text-primary);
+          letter-spacing: -0.03em;
+          line-height: 1;
+          color: #fff;
         }
 
-        .badge-subtle {
-          background: #eef3f0;
-          color: var(--text-muted);
+        .gate-brand-sub {
+          font-size: 0.78rem;
+          font-weight: 600;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #b7e4c7;
+        }
+
+        .gate-copy {
+          position: relative;
+          z-index: 1;
+        }
+
+        .gate-kicker {
+          text-transform: uppercase;
+          letter-spacing: 0.16em;
           font-size: 0.72rem;
-          padding: 2px 6px;
-          border-radius: 4px;
+          font-weight: 600;
+          color: #b7e4c7;
+          margin-bottom: 14px;
         }
 
-        .plan-cost {
-          display: flex;
-          align-items: baseline;
-          gap: 4px;
-          margin-bottom: 8px;
+        .gate-panel h1,
+        .gate-panel p,
+        .gate-panel li {
+          color: #f7fbf8;
         }
 
-        .plan-cost strong {
-          font-size: 1.2rem;
-          color: var(--color-primary);
+        .gate-copy h1 {
+          font-family: 'Fraunces', Georgia, serif;
+          font-size: clamp(2.1rem, 3.4vw, 3rem);
+          font-weight: 560;
+          line-height: 1.02;
+          letter-spacing: -0.03em;
+          max-width: 9.5ch;
+          margin-bottom: 16px;
+          color: #ffffff;
         }
 
-        .plan-cost span {
-          font-size: 0.74rem;
-          color: var(--text-muted);
+        .gate-copy p:last-child {
+          max-width: 32ch;
+          color: #d5eee2;
+          font-size: 1.02rem;
+          line-height: 1.55;
         }
 
-        .plan-benefits {
+        .gate-points {
+          position: relative;
+          z-index: 1;
           list-style: none;
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          font-size: 0.76rem;
-          color: var(--text-secondary);
+          gap: 10px;
+          font-size: 0.94rem;
+          color: #e7f6ee;
         }
 
-        .plan-benefits li {
+        .gate-points li {
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 10px;
         }
 
-        .trust-footnote {
+        .gate-points li::before {
+          content: '';
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #95d5b2;
+          flex: 0 0 auto;
+        }
+
+        .gate-form {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
-          font-size: 0.75rem;
-          color: var(--text-muted);
-          text-align: center;
-          margin-top: 4px;
+          min-height: 0;
+          height: 100%;
+          padding: 20px 40px;
+          overflow: auto;
         }
 
-        @media (max-width: 640px) {
-          .auth-card {
-            padding: 24px 20px;
-          }
-          .form-row, .plan-options-grid, .demo-btns-grid {
-            grid-template-columns: 1fr;
-          }
+        .gate-form-inner {
+          width: min(480px, 100%);
+          background: transparent;
+          border: 0;
+          box-shadow: none;
+        }
+
+        .gate-back {
+          background: transparent;
+          border: 0;
+          padding: 0;
+          margin-bottom: 10px;
+          color: #5e8070;
+          font-size: 0.84rem;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .gate-back:hover { color: #1b4332; }
+
+        .gate-form h2 {
+          font-family: 'Fraunces', Georgia, serif;
+          font-size: 1.85rem;
+          font-weight: 560;
+          letter-spacing: -0.03em;
+          color: #1b4332;
+          margin-bottom: 6px;
+        }
+
+        .gate-lead {
+          color: #3b5a4a;
+          font-size: 0.92rem;
+          line-height: 1.5;
+          margin-bottom: 12px;
+        }
+
+        .gate-form form {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .gate-field {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          min-width: 0;
+        }
+
+        .gate-field label {
+          font-size: 0.78rem;
+          font-weight: 650;
+          letter-spacing: 0.01em;
+          color: #1b4332;
+        }
+
+        .gate-field input,
+        .gate-field select {
+          width: 100%;
+          height: 42px;
+          border: 1px solid #d3e6da;
+          border-radius: 10px;
+          padding: 0 14px;
+          background: #fbfefc;
+          color: #132a1e;
+          font: inherit;
+          font-size: 0.95rem;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        }
+
+        .gate-field input::placeholder {
+          color: #8aa898;
+        }
+
+        .gate-field select {
+          appearance: none;
+          background-image: linear-gradient(45deg, transparent 50%, #2d6a4f 50%), linear-gradient(135deg, #2d6a4f 50%, transparent 50%);
+          background-position: calc(100% - 18px) 18px, calc(100% - 12px) 18px;
+          background-size: 6px 6px, 6px 6px;
+          background-repeat: no-repeat;
+          padding-right: 36px;
+          cursor: pointer;
+        }
+
+        .gate-field input:focus,
+        .gate-field select:focus {
+          outline: none;
+          border-color: #52b788;
+          background-color: #fff;
+          box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.18);
+        }
+
+        .gate-hint {
+          margin: 0;
+          color: #5e8070;
+          font-size: 0.78rem;
+        }
+
+        .gate-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+
+        .gate-check {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 0.88rem;
+          font-weight: 500;
+          color: #3b5a4a;
+        }
+
+        .gate-check input {
+          width: 16px;
+          height: 16px;
+          accent-color: #2d6a4f;
+        }
+
+        .gate-error {
+          color: #a63a3a;
+          font-size: 0.84rem;
+          margin: 0;
+        }
+
+        .gate-submit {
+          height: 44px;
+          border: 0;
+          border-radius: 10px;
+          background: #2d6a4f;
+          color: #fff;
+          font: inherit;
+          font-size: 0.98rem;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .gate-submit:hover { background: #22543d; }
+        .gate-submit:disabled { opacity: 0.7; cursor: wait; }
+
+        .gate-switch {
+          margin: 2px 0 0;
+          text-align: center;
+          font-size: 0.88rem;
+          color: #3b5a4a;
+        }
+
+        .gate-switch button {
+          background: none;
+          border: 0;
+          padding: 0;
+          color: #1b4332;
+          font: inherit;
+          font-weight: 700;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+          cursor: pointer;
+        }
+
+        @media (max-width: 860px) {
+          .gate { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; min-height: 100vh; overflow: visible; }
+          .gate-panel { min-height: 0; padding: 24px 22px; }
+          .gate-copy h1 { max-width: none; font-size: 2.1rem; }
+          .gate-points { display: none; }
+          .gate-form { height: auto; padding: 20px 16px 28px; overflow: visible; }
+          .gate-brand-name { font-size: 1.55rem; }
+        }
+
+        @media (max-width: 560px) {
+          .gate-row { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>

@@ -44,9 +44,10 @@ async function register(input) {
       name: input.name,
       email: input.email.toLowerCase(),
       passwordHash: await bcrypt.hash(input.password, 10),
-      phone: input.phone,
-      studentId: input.studentId,
-      role: 'MEMBER',
+      phone: input.phone || null,
+      studentId: input.studentId || null,
+      role: input.role || 'MEMBER',
+      isVolunteer: input.role === 'MEMBER' ? Boolean(input.isVolunteer) : false,
       notificationPreferences: defaults,
     },
   });

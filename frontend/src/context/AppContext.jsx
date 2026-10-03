@@ -1,22 +1,26 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { INITIAL_EVENTS, INITIAL_PRODUCTS, INITIAL_ANNOUNCEMENTS, DEMO_USERS } from '../data/mockData';
+import { INITIAL_EVENTS, INITIAL_PRODUCTS } from '../data/mockData';
+import { api } from '../services/api';
 
 const AppContext = createContext();
+
+function toSessionUser(account) {
+  if (!account) return null;
+  return {
+    ...account,
+    isMember: account.membership?.status === 'ACTIVE',
+    membershipType: account.membership?.planName || null,
+    expiryDate: account.membership?.endDate || null,
+  };
+}
 
 export function AppProvider({ children }) {
   // Navigation / Router State
   const [currentRoute, setCurrentRoute] = useState({ page: 'home', params: {} });
   
-  // Auth & User State
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('campushub_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
 
   // Events State (with remaining seat tracking)
   const [events, setEvents] = useState(() => {
@@ -65,10 +69,13 @@ export function AppProvider({ children }) {
   // Toasts
   const [toasts, setToasts] = useState([]);
 
-  // Sync to LocalStorage
   useEffect(() => {
-    localStorage.setItem('campushub_user', JSON.stringify(user));
-  }, [user]);
+    localStorage.removeItem('campushub_user');
+    api('/auth/me')
+      .then((result) => setUser(toSessionUser(result.data)))
+      .catch(() => setUser(null))
+      .finally(() => setAuthReady(true));
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('campushub_events_v3', JSON.stringify(events));
@@ -153,41 +160,36 @@ export function AppProvider({ children }) {
     }
   };
 
-  // Auth Operations
-  const login = (userData) => {
-    setUser(userData);
-    addToast('Welcome back!', `Logged in as ${userData.name} (${userData.role})`, 'success');
+  const signIn = async ({ email, password, remember }) => {
+    const result = await api('/auth/login', {
+      method: 'POST',
+      body: { email, password, remember },
+    });
+    const session = toSessionUser(result.data.user);
+    setUser(session);
+    addToast('Signed in', session.name, 'success');
+    navigate('home');
   };
 
-  const loginAsDemo = (roleKey) => {
-    const demo = DEMO_USERS[roleKey];
-    if (demo) {
-      login(demo);
-      navigate('home');
+  const signUp = async (account) => {
+    const result = await api('/auth/register', {
+      method: 'POST',
+      body: account,
+    });
+    const session = toSessionUser(result.data.user);
+    setUser(session);
+    addToast('Account created', session.name, 'success');
+    navigate('home');
+  };
+
+  const logout = async () => {
+    try {
+      await api('/auth/logout', { method: 'POST' });
+    } catch {
+      // The cookie is cleared when the request succeeds. A failed call still ends the local session.
     }
-  };
-
-  const logout = () => {
     setUser(null);
     addToast('Signed out', 'You have been logged out of CampusHub', 'info');
-  };
-
-  const registerUser = (studentData) => {
-    const newUser = {
-      name: `${studentData.firstName} ${studentData.lastName}`.trim(),
-      email: studentData.email,
-      studentId: studentData.studentId || `STU-${Math.floor(1000 + Math.random() * 9000)}`,
-      department: studentData.department,
-      year: studentData.year,
-      phone: studentData.phone,
-      role: 'MEMBER',
-      isMember: true,
-      membershipType: studentData.membershipType || 'Standard Active',
-      expiryDate: 'Dec 31, 2026'
-    };
-    setUser(newUser);
-    triggerConfetti();
-    addToast('Welcome to CampusHub!', 'Your student membership has been activated!', 'success');
     navigate('home');
   };
 
@@ -370,10 +372,10 @@ export function AppProvider({ children }) {
         currentRoute,
         navigate,
         user,
-        login,
-        loginAsDemo,
+        authReady,
+        signIn,
+        signUp,
         logout,
-        registerUser,
         events,
         getEvent,
         bookTicket,

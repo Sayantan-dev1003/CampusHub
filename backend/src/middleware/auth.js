@@ -2,11 +2,11 @@ const jwt = require('jsonwebtoken');
 const { env } = require('../config/env');
 const prisma = require('../lib/prisma');
 const { ApiError } = require('../lib/errors');
+const { tokenFromRequest } = require('../lib/authCookie');
 
 async function attachUser(req) {
-  const header = req.headers.authorization || '';
-  if (!header.startsWith('Bearer ')) return null;
-  const token = header.slice(7);
+  const token = tokenFromRequest(req);
+  if (!token) return null;
   const payload = jwt.verify(token, env.jwtSecret);
   const user = await prisma.user.findUnique({ where: { id: payload.userId } });
   if (!user || user.status !== 'ACTIVE') return null;

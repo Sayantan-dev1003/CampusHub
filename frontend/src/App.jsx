@@ -43,13 +43,15 @@ function AppContent() {
     }
   };
 
+  const isAuthPage = currentRoute.page === 'login' || currentRoute.page === 'register';
+
   return (
-    <div className="app-layout">
-      <Navbar />
-      <main className="app-main-content">
+    <div className={`app-layout${isAuthPage ? ' auth-layout' : ''}`}>
+      {!isAuthPage && <Navbar />}
+      <main className={`app-main-content ${isAuthPage ? 'auth-shell' : ''}`}>
         {renderCurrentPage()}
       </main>
-      <Footer />
+      {!isAuthPage && <Footer />}
 
       {/* Global Drawers & Modals */}
       <CartDrawer />
@@ -65,6 +67,20 @@ function AppContent() {
 
         .app-main-content {
           flex: 1;
+        }
+
+        .app-layout.auth-layout {
+          height: 100vh;
+          height: 100dvh;
+          overflow: hidden;
+        }
+
+        .app-main-content.auth-shell {
+          display: flex;
+          flex: 1;
+          min-height: 0;
+          height: 100%;
+          overflow: hidden;
         }
       `}</style>
     </div>

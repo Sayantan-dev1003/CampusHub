@@ -6,11 +6,14 @@ const registerSchema = z.object({
   password: z.string().min(8).max(72),
   studentId: z.string().trim().min(1).max(40).optional(),
   phone: z.string().trim().max(20).optional(),
+  role: z.enum(['MEMBER', 'ADMIN', 'TREASURER']).default('MEMBER'),
+  isVolunteer: z.boolean().optional(),
 });
 
 const loginSchema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(1),
+  remember: z.boolean().optional(),
 });
 
 const passwordSchema = z.object({

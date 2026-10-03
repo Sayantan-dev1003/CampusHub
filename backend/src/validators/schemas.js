@@ -99,7 +99,7 @@ const verifySchema = z.object({
   razorpaySignature: z.string().min(1),
 });
 
-const checkInSchema = z.object({ qrToken: z.string().min(1) });
+const checkInSchema = z.object({ qrToken: z.string().min(1), eventId: z.string().min(1).optional() });
 
 const announcementSchema = z.object({
   title: z.string().trim().min(2).max(160),

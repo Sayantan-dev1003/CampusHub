@@ -43,6 +43,7 @@ async function serializeEvent(event, user, taken, knownMembership) {
     remainingSeats: event.capacity - used,
     memberPrice: money(event.memberPrice),
     nonMemberPrice: money(event.nonMemberPrice),
+    status: event.status,
 
     createdById: event.createdById,
     createdAt: event.createdAt,
@@ -104,9 +105,13 @@ async function createEvent(userId, input) {
 async function updateEvent(eventId, input) {
   const existing = await prisma.event.findUnique({ where: { id: eventId } });
   if (!existing) throw new ApiError(404, 'Event not found', 'NOT_FOUND');
+  // Prevent any edits to a completed/cancelled event (except status changes)
+  if ((existing.status === 'COMPLETED' || existing.status === 'CANCELLED') && Object.keys(input).some((k) => k !== 'status')) {
+    throw new ApiError(409, 'Event is closed and cannot be edited', 'EVENT_CLOSED');
+  }
   const startsAt = input.startsAt || existing.startsAt;
   const endsAt = input.endsAt || existing.endsAt;
-  if (new Date(endsAt) <= new Date(startsAt)) {
+  if (!input.status && new Date(endsAt) <= new Date(startsAt)) {
     throw new ApiError(400, 'Event end must be after the start', 'VALIDATION_ERROR');
   }
   if (input.capacity != null) {
@@ -116,6 +121,14 @@ async function updateEvent(eventId, input) {
     }
   }
   const event = await prisma.event.update({ where: { id: eventId }, data: input });
+  return serializeEvent(event, { id: existing.createdById, role: 'ADMIN' });
+}
+
+async function closeEvent(eventId) {
+  const existing = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!existing) throw new ApiError(404, 'Event not found', 'NOT_FOUND');
+  if (existing.status === 'COMPLETED') throw new ApiError(409, 'Event is already completed', 'EVENT_ALREADY_CLOSED');
+  const event = await prisma.event.update({ where: { id: eventId }, data: { status: 'COMPLETED' } });
   return serializeEvent(event, { id: existing.createdById, role: 'ADMIN' });
 }
 
@@ -163,6 +176,7 @@ module.exports = {
   getEvent,
   createEvent,
   updateEvent,
+  closeEvent,
 
   analytics,
   serializeEvent,

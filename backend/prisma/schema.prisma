@@ -32,6 +32,13 @@ enum MembershipStatus {
 }
 
 
+enum EventStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
 enum TicketType {
   MEMBER
   NON_MEMBER
@@ -259,6 +266,7 @@ model Event {
   capacity        Int
   memberPrice     Decimal     @db.Decimal(12, 2) @map("member_price")
   nonMemberPrice  Decimal     @db.Decimal(12, 2) @map("non_member_price")
+  status          EventStatus @default(UPCOMING)
 
   createdById     String      @map("created_by")
   createdAt       DateTime    @default(now()) @map("created_at")
@@ -269,6 +277,7 @@ model Event {
   attendance Attendance[]
 
   @@index([startsAt])
+  @@index([status])
   @@map("events")
 }
 

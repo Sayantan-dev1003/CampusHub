@@ -156,6 +156,9 @@ router.patch('/events/:eventId', requireAuth, admin, validateBody(schemas.eventP
   if (data.endsAt) data.endsAt = new Date(data.endsAt);
   sendData(res, await events.updateEvent(req.params.eventId, data), 'Event updated');
 }));
+router.post('/events/:eventId/close', requireAuth, admin, asyncHandler(async (req, res) => {
+  sendData(res, await events.closeEvent(req.params.eventId), 'Event closed');
+}));
 
 router.get('/tickets/my', requireAuth, asyncHandler(async (req, res) => {
   sendData(res, await tickets.myTickets(req.user.id));
@@ -163,8 +166,8 @@ router.get('/tickets/my', requireAuth, asyncHandler(async (req, res) => {
 router.get('/tickets/:ticketId', requireAuth, asyncHandler(async (req, res) => {
   sendData(res, await tickets.getTicket(req.params.ticketId, req.user));
 }));
-router.post('/tickets/check-in', requireAuth, admin, validateBody(schemas.checkInSchema), asyncHandler(async (req, res) => {
-  sendData(res, await tickets.checkIn(req.user.id, req.body.qrToken), 'Checked in');
+router.post('/tickets/check-in', requireAuth, requireAdminOrVolunteer, validateBody(schemas.checkInSchema), asyncHandler(async (req, res) => {
+  sendData(res, await tickets.checkIn(req.user.id, req.body.qrToken, req.body.eventId || null), 'Checked in');
 }));
 
 router.post('/payments/orders', requireAuth, validateBody(schemas.paymentOrderSchema), asyncHandler(async (req, res) => {

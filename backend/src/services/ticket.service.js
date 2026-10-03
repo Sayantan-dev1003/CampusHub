@@ -45,18 +45,28 @@ async function getTicket(ticketId, user) {
   };
 }
 
-async function checkIn(staffId, qrToken) {
+async function checkIn(staffId, qrToken, eventId) {
   return prisma.runTransaction(async (tx) => {
     const ticket = await tx.ticket.findUnique({ where: { qrToken }, include: { event: true } });
-    if (!ticket) throw new ApiError(404, 'Ticket not found', 'NOT_FOUND');
-    if (ticket.status === 'USED') throw new ApiError(409, 'Ticket already used', 'TICKET_ALREADY_USED');
-    if (ticket.status !== 'PAID') throw new ApiError(409, 'Ticket is not paid', 'TICKET_NOT_PAID');
+    if (!ticket) throw new ApiError(404, 'Invalid ticket — QR code not recognised', 'NOT_FOUND');
+    // Step 5 — Event match check
+    if (eventId && ticket.eventId !== eventId) {
+      throw new ApiError(409, 'Ticket not valid for this event', 'EVENT_MISMATCH');
+    }
+    // Prevent check-in to a closed event
+    if (ticket.event?.status === 'COMPLETED' || ticket.event?.status === 'CANCELLED') {
+      throw new ApiError(409, 'This event is already closed', 'EVENT_CLOSED');
+    }
+    // Step 6 — Duplicate entry check
+    if (ticket.status === 'USED') throw new ApiError(409, 'Ticket already checked in', 'TICKET_ALREADY_USED');
+    if (ticket.status !== 'PAID') throw new ApiError(409, 'Ticket has not been paid for', 'TICKET_NOT_PAID');
     const checkedInAt = new Date();
+    // Step 7 — Atomic status update (PAID → USED)
     const claimed = await tx.ticket.updateMany({
       where: { id: ticket.id, status: 'PAID' },
       data: { status: 'USED', checkedInAt },
     });
-    if (claimed.count !== 1) throw new ApiError(409, 'Ticket already used', 'TICKET_ALREADY_USED');
+    if (claimed.count !== 1) throw new ApiError(409, 'Ticket already checked in', 'TICKET_ALREADY_USED');
     const updated = await tx.ticket.findUnique({ where: { id: ticket.id } });
     const attendance = await tx.attendance.create({
       data: {
@@ -70,6 +80,9 @@ async function checkIn(staffId, qrToken) {
     return {
       ticketId: updated.id,
       eventId: ticket.eventId,
+      eventTitle: ticket.event?.title,
+      studentName: (await tx.user.findUnique({ where: { id: ticket.userId }, select: { name: true } }))?.name,
+      ticketType: ticket.ticketType,
       status: updated.status,
       checkedInAt,
       checkedInById: staffId,

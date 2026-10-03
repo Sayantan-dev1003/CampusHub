@@ -218,6 +218,7 @@ export function EventsPage({ eventId }) {
             { key: 'capacity', label: 'Seats left', render: (row) => `${row.remainingSeats ?? row.capacity} / ${row.capacity}` },
             { key: 'memberPrice', label: 'Member Price', render: (row) => money(row.memberPrice) },
             { key: 'nonMemberPrice', label: 'Non-Member Price', render: (row) => money(row.nonMemberPrice) },
+            { key: 'status', label: 'Status' },
           ]}
         />
       </LoadState>
@@ -337,6 +338,29 @@ function EventDetail({ eventId }) {
   const event = useApi(`/events/${eventId}`);
   const stats = useApi(`/events/${eventId}/analytics`);
   const attendance = useApi(`/events/${eventId}/attendance`);
+  const [closing, setClosing] = React.useState(false);
+
+  const closeEvent = async () => {
+    if (!window.confirm('Mark this event as COMPLETED? This will lock all future check-ins and ticket purchases.')) return;
+    setClosing(true);
+    try {
+      await api(`/events/${eventId}/close`, { method: 'POST' });
+      addToast('Event closed', 'Marked as completed', 'success');
+      event.reload();
+      stats.reload();
+    } catch (err) {
+      addToast('Could not close event', err.message, 'error');
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const isClosed = event.data?.status === 'COMPLETED' || event.data?.status === 'CANCELLED';
+  const ticketsSold = stats.data?.ticketsSold ?? 0;
+  const checkedIn = stats.data?.checkedIn ?? 0;
+  const noShows = ticketsSold - checkedIn;
+  const memberSold = stats.data?.memberTicketsSold ?? 0;
+  const nonMemberSold = stats.data?.nonMemberTicketsSold ?? 0;
 
   return (
     <PageFrame
@@ -345,20 +369,44 @@ function EventDetail({ eventId }) {
       lede={event.data ? `${whenTime(event.data.startsAt)} · ${event.data.venue}` : ''}
       action={event.data ? (
         <div className="row-actions">
-
+          {!isClosed && (
+            <button
+              type="button"
+              className="desk-primary"
+              disabled={closing}
+              onClick={closeEvent}
+              style={{ background: '#7c3535' }}
+            >
+              {closing ? 'Closing…' : '🔒 Mark as Completed'}
+            </button>
+          )}
+          {isClosed && (
+            <span className="desk-pill tone-muted" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>Event Completed</span>
+          )}
         </div>
       ) : null}
     >
       <LoadState loading={event.loading || stats.loading} error={event.error || stats.error}>
-        <div className="mini-kpis">
-          <article><span>Sold</span><strong>{stats.data?.ticketsSold ?? 0}</strong></article>
-          <article><span>Checked in</span><strong>{stats.data?.checkedIn ?? 0}</strong></article>
-          <article><span>Seats left</span><strong>{stats.data?.remainingSeats ?? '—'}</strong></article>
-          <article><span>Sold (Member)</span><strong>{stats.data?.memberTicketsSold ?? 0}</strong></article>
-          <article><span>Sold (Non-member)</span><strong>{stats.data?.nonMemberTicketsSold ?? 0}</strong></article>
+        {/* Step 11 — Post-event attendance report */}
+        <div className="mini-kpis" style={{ gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>
+          <article><span>Tickets sold</span><strong>{ticketsSold}</strong></article>
+          <article><span>Checked in</span><strong>{checkedIn}</strong></article>
+          <article><span>No-shows</span><strong style={{ color: noShows > 0 ? '#a63a3a' : '#1b4332' }}>{noShows}</strong></article>
+          <article><span>Member tickets</span><strong>{memberSold}</strong></article>
+          <article><span>Non-member tickets</span><strong>{nonMemberSold}</strong></article>
           <article><span>Ticket revenue</span><strong>{money(stats.data?.revenue)}</strong></article>
         </div>
-        <h2 className="section-label">Attendance</h2>
+        <div className="mini-kpis" style={{ gridTemplateColumns: 'repeat(3, minmax(0,1fr))', marginTop: 0 }}>
+          <article><span>Capacity</span><strong>{stats.data?.capacity ?? '—'}</strong></article>
+          <article><span>Seats remaining</span><strong>{stats.data?.remainingSeats ?? '—'}</strong></article>
+          <article>
+            <span>Event status</span>
+            <strong style={{ fontSize: '1.1rem', textTransform: 'capitalize' }}>
+              {(event.data?.status || 'UPCOMING').toLowerCase()}
+            </strong>
+          </article>
+        </div>
+        <h2 className="section-label">Attendance Log</h2>
         <LoadState loading={attendance.loading} error={attendance.error}>
           <DataTable
             empty="No one has checked in."
@@ -383,18 +431,25 @@ export function TicketsPage({ eventId }) {
   const events = useApi('/events?limit=100');
   const attendance = useApi(eventId ? `/events/${eventId}/attendance` : null, Boolean(eventId));
   const stats = useApi(eventId ? `/events/${eventId}/analytics` : null, Boolean(eventId));
-  const [token, setToken] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [token, setToken] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [lastCheckedIn, setLastCheckedIn] = React.useState(null);
 
-  const checkIn = async (event) => {
-    event.preventDefault();
+  const selectedEvent = (events.data || []).find((e) => e.id === eventId);
+  const isClosed = selectedEvent?.status === 'COMPLETED' || selectedEvent?.status === 'CANCELLED';
+
+  const checkIn = async (e) => {
+    e.preventDefault();
     if (!eventId) return;
     setBusy(true);
     setError('');
+    setLastCheckedIn(null);
     try {
-      await api('/tickets/check-in', { method: 'POST', body: { qrToken: token.trim() } });
-      addToast('Checked in', 'Ticket marked as used', 'success');
+      const result = await api('/tickets/check-in', { method: 'POST', body: { qrToken: token.trim(), eventId } });
+      const name = result?.data?.studentName || 'Student';
+      setLastCheckedIn(name);
+      addToast('✅ Check-in Successful', name, 'success');
       setToken('');
       attendance.reload();
       stats.reload();
@@ -406,28 +461,64 @@ export function TicketsPage({ eventId }) {
   };
 
   return (
-    <PageFrame kicker="Events" title="Tickets and attendance" lede="Pick an event to see sold seats and the door list.">
+    <PageFrame kicker="Events" title="Tickets and attendance" lede="Pick an event, then scan or paste the ticket QR token to check in attendees.">
       <LoadState loading={events.loading} error={events.error}>
         <label className="inline-select">Event
-          <select value={eventId || ''} onChange={(event) => navigate('admin', { section: 'tickets', id: event.target.value || undefined })}>
+          <select value={eventId || ''} onChange={(e) => { navigate('admin', { section: 'tickets', id: e.target.value || undefined }); setLastCheckedIn(null); setError(''); }}>
             <option value="">Select an event</option>
-            {(events.data || []).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+            {(events.data || []).map((item) => <option key={item.id} value={item.id}>{item.title} {item.status === 'COMPLETED' ? '(Completed)' : item.status === 'CANCELLED' ? '(Cancelled)' : ''}</option>)}
           </select>
         </label>
         {eventId && (
           <LoadState loading={stats.loading || attendance.loading} error={stats.error || attendance.error}>
-            <form className="desk-toolbar" onSubmit={checkIn}>
-              <input value={token} onChange={(event) => setToken(event.target.value)} placeholder="Paste a ticket QR token" required />
-              <button className="desk-primary" type="submit" disabled={busy}>{busy ? 'Checking…' : 'Check in'}</button>
-            </form>
-            {error && <p className="desk-error">{error}</p>}
-            <div className="mini-kpis">
+            {/* Step 9 — Live attendance counter */}
+            <div className="mini-kpis" style={{ marginBottom: '16px' }}>
               <article><span>Tickets sold</span><strong>{stats.data?.ticketsSold ?? 0}</strong></article>
-              <article><span>Checked in</span><strong>{stats.data?.checkedIn ?? 0}</strong></article>
+              <article>
+                <span>Checked in</span>
+                <strong style={{ color: '#2d6a4f' }}>{stats.data?.checkedIn ?? 0} / {stats.data?.ticketsSold ?? 0}</strong>
+              </article>
               <article><span>Capacity</span><strong>{stats.data?.capacity ?? '—'}</strong></article>
             </div>
+
+            {/* Step 3 & 8 — Ticket input + response */}
+            {isClosed ? (
+              <div style={{ background: '#fde8e8', border: '1px solid #f5c6c6', borderRadius: '12px', padding: '16px 20px', color: '#991b1b', fontWeight: 600, marginBottom: '16px' }}>
+                🔒 This event is closed — check-in is no longer available.
+              </div>
+            ) : (
+              <form className="desk-toolbar" onSubmit={checkIn} style={{ marginBottom: '12px' }}>
+                <input
+                  id="qr-token-input"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="Paste or scan ticket QR token"
+                  required
+                  autoComplete="off"
+                  style={{ flex: 1, fontFamily: 'monospace' }}
+                />
+                <button className="desk-primary" type="submit" disabled={busy || !token.trim()}>
+                  {busy ? 'Checking in…' : 'Check in'}
+                </button>
+              </form>
+            )}
+
+            {/* Step 8 — Success / Error visual response */}
+            {lastCheckedIn && !error && (
+              <div style={{ background: '#e5f6ec', border: '1px solid #b7e4c7', borderRadius: '12px', padding: '14px 20px', color: '#166534', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '1.5rem' }}>✅</span>
+                <span>Check-in Successful — <strong>{lastCheckedIn}</strong></span>
+              </div>
+            )}
+            {error && (
+              <div style={{ background: '#fde8e8', border: '1px solid #f5c6c6', borderRadius: '12px', padding: '14px 20px', color: '#991b1b', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '1.5rem' }}>❌</span>
+                <span>{error}</span>
+              </div>
+            )}
+
             <DataTable
-              empty="No check-ins for this event."
+              empty="No check-ins yet for this event."
               rows={attendance.data || []}
               columns={[
                 { key: 'name', label: 'Name' },

@@ -77,8 +77,9 @@ export function AppProvider({ children }) {
         setUser(session);
         const hash = (window.location.hash.replace('#', '') || 'home').replace(/^\/+/, '');
         const page = hash.split('/').filter(Boolean)[0] || 'home';
-        if (session?.role === 'ADMIN' && ['home', 'login', 'register'].includes(page)) {
-          window.location.hash = 'admin/dashboard';
+        if (['home', 'login', 'register'].includes(page)) {
+          if (session?.role === 'ADMIN') window.location.hash = 'admin/dashboard';
+          else if (session?.role === 'MEMBER') window.location.hash = 'member-dashboard';
         }
       })
       .catch(() => setUser(null))
@@ -114,7 +115,8 @@ export function AppProvider({ children }) {
         return;
       }
 
-      if (['home', 'events', 'store', 'about', 'login', 'register'].includes(page)) {
+  
+      if (['home', 'events', 'store', 'about', 'login', 'register'].includes(page) || page.startsWith('member-')) {
         if (page === 'events' && paramId) {
           setCurrentRoute({ page: 'event-details', params: { id: paramId } });
         } else if (page === 'store' && paramId) {
@@ -185,6 +187,7 @@ export function AppProvider({ children }) {
     setUser(session);
     addToast('Signed in', session.name, 'success');
     if (session.role === 'ADMIN') navigate('admin', { section: 'dashboard' });
+    else if (session.role === 'MEMBER') navigate('member-dashboard');
     else navigate('home');
     return session;
   };
@@ -198,6 +201,7 @@ export function AppProvider({ children }) {
     setUser(session);
     addToast('Account created', session.name, 'success');
     if (session.role === 'ADMIN') navigate('admin', { section: 'dashboard' });
+    else if (session.role === 'MEMBER') navigate('member-dashboard');
     else navigate('home');
   };
 

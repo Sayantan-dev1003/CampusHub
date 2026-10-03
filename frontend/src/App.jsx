@@ -15,6 +15,9 @@ import ProductDetailsPage from './pages/ProductDetailsPage';
 import AboutPage from './pages/AboutPage';
 import AuthPage from './pages/AuthPage';
 import AdminApp from './admin/AdminApp';
+import MemberDashboardPage from './pages/member/MemberDashboardPage';
+import MemberProfilePage from './pages/member/MemberProfilePage';
+import MemberLayout from './pages/member/MemberLayout';
 
 import './styles/theme.css';
 
@@ -41,6 +44,24 @@ function AppContent() {
         return <AuthPage initialMode="register" />;
       case 'admin':
         return <AdminApp />;
+      case 'member-dashboard':
+        return <MemberDashboardPage />;
+      case 'member-profile':
+        return <MemberProfilePage />;
+      case 'member-membership':
+      case 'member-tickets':
+      case 'member-orders':
+      case 'member-announcements':
+      case 'member-volunteer':
+      case 'member-notifications':
+        return (
+          <MemberLayout>
+            <div style={{ padding: '40px' }}>
+              <h2>Page Under Construction</h2>
+              <p>This section is coming soon.</p>
+            </div>
+          </MemberLayout>
+        );
       default:
         return <HomePage />;
     }
@@ -48,14 +69,16 @@ function AppContent() {
 
   const isAuthPage = currentRoute.page === 'login' || currentRoute.page === 'register';
   const isAdminPage = currentRoute.page === 'admin';
+  const isMemberPage = currentRoute.page.startsWith('member-');
+  const hidePublicLayout = isAuthPage || isAdminPage || isMemberPage;
 
   return (
     <div className={`app-layout${isAuthPage ? ' auth-layout' : ''}`}>
-      {!isAuthPage && !isAdminPage && <Navbar />}
+      {!hidePublicLayout && <Navbar />}
       <main className={`app-main-content ${isAuthPage ? 'auth-shell' : ''}`}>
         {renderCurrentPage()}
       </main>
-      {!isAuthPage && !isAdminPage && <Footer />}
+      {!hidePublicLayout && <Footer />}
 
       {/* Global Drawers & Modals */}
       <CartDrawer />

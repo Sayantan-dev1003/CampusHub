@@ -8,9 +8,9 @@ async function memberDashboard(user) {
   const now = new Date();
   const [membership, upcomingEventCount, upcomingEvents, ticketCount, tickets, announcements, orders, openTaskCount, tasks, unread] = await Promise.all([
     currentMembership(user.id),
-    prisma.event.count({ where: { status: 'PUBLISHED', startsAt: { gte: now } } }),
+    prisma.event.count({ where: { startsAt: { gte: now } } }),
     prisma.event.findMany({
-      where: { status: 'PUBLISHED', startsAt: { gte: now } },
+      where: { startsAt: { gte: now } },
       orderBy: { startsAt: 'asc' },
       take: 5,
     }),
@@ -88,7 +88,7 @@ async function adminDashboard() {
   ] = await Promise.all([
     prisma.user.count({ where: { role: 'MEMBER' } }),
     prisma.membership.count({ where: { status: 'ACTIVE', endDate: { gte: now } } }),
-    prisma.event.count({ where: { status: 'PUBLISHED', startsAt: { gte: now } } }),
+    prisma.event.count({ where: { startsAt: { gte: now } } }),
     prisma.ticket.count({ where: { status: { in: ['PAID', 'USED'] } } }),
     prisma.order.count({ where: { orderStatus: { in: ['PAID', 'PROCESSING', 'READY'] } } }),
     prisma.order.count({ where: { orderStatus: { in: ['PENDING', 'PAID', 'PROCESSING', 'READY'] } } }),
@@ -107,7 +107,7 @@ async function adminDashboard() {
     prisma.transaction.aggregate({ where: { status: 'POSTED', type: 'INCOME' }, _sum: { amount: true } }),
     memberships.stats(),
     prisma.event.findMany({
-      where: { status: 'PUBLISHED', startsAt: { gte: now } },
+      where: { startsAt: { gte: now } },
       orderBy: { startsAt: 'asc' },
       take: 5,
     }),

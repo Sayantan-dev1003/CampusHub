@@ -49,9 +49,6 @@ async function checkIn(staffId, qrToken) {
   return prisma.runTransaction(async (tx) => {
     const ticket = await tx.ticket.findUnique({ where: { qrToken }, include: { event: true } });
     if (!ticket) throw new ApiError(404, 'Ticket not found', 'NOT_FOUND');
-    if (ticket.event.status === 'CANCELLED') {
-      throw new ApiError(409, 'Event is cancelled', 'TICKET_NOT_PAID');
-    }
     if (ticket.status === 'USED') throw new ApiError(409, 'Ticket already used', 'TICKET_ALREADY_USED');
     if (ticket.status !== 'PAID') throw new ApiError(409, 'Ticket is not paid', 'TICKET_NOT_PAID');
     const checkedInAt = new Date();
@@ -94,6 +91,10 @@ async function attendance(eventId) {
     ticketId: row.ticketId,
     userId: row.userId,
     name: row.user.name,
+    email: row.user.email,
+    ticketType: row.ticket.ticketType,
+    price: money(row.ticket.price),
+    purchasedAt: row.ticket.createdAt,
     checkedInAt: row.checkedInAt,
     checkedInById: row.checkedInById,
   }));

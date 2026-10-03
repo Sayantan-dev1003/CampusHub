@@ -213,9 +213,11 @@ export function EventsPage({ eventId }) {
           columns={[
             { key: 'title', label: 'Event', render: (row) => <button type="button" className="linkish" onClick={() => navigate('admin', { section: 'events', id: row.id })}>{row.title}</button> },
             { key: 'startsAt', label: 'Starts', render: (row) => whenTime(row.startsAt) },
+            { key: 'endsAt', label: 'Ends', render: (row) => whenTime(row.endsAt) },
             { key: 'venue', label: 'Venue' },
-            { key: 'capacity', label: 'Seats left', render: (row) => `${row.remainingSeats} / ${row.capacity}` },
-            { key: 'status', label: 'Status' },
+            { key: 'capacity', label: 'Seats left', render: (row) => `${row.remainingSeats ?? row.capacity} / ${row.capacity}` },
+            { key: 'memberPrice', label: 'Member Price', render: (row) => money(row.memberPrice) },
+            { key: 'nonMemberPrice', label: 'Non-Member Price', render: (row) => money(row.nonMemberPrice) },
           ]}
         />
       </LoadState>
@@ -226,10 +228,11 @@ export function EventsPage({ eventId }) {
 function EventForm() {
   const { navigate, addToast } = useApp();
   const [form, setForm] = useState({
-    title: '', description: '', venue: '', capacity: 100, memberPrice: 0, nonMemberPrice: 0, startsAt: '', endsAt: '', status: 'DRAFT',
+    title: '', description: '', venue: '', capacity: 100, memberPrice: 0, nonMemberPrice: 0, startsAt: '', endsAt: '',
   });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState(1);
   const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
 
   const submit = async (event) => {
@@ -248,7 +251,7 @@ function EventForm() {
           nonMemberPrice: Number(form.nonMemberPrice),
           startsAt: toOffsetIso(form.startsAt),
           endsAt: toOffsetIso(form.endsAt),
-          status: form.status,
+
         },
       });
       addToast('Event created', form.title, 'success');
@@ -260,32 +263,71 @@ function EventForm() {
     }
   };
 
+  const nextStep = (e) => {
+    if (e.target.form.reportValidity()) {
+      setStep(2);
+    }
+  };
+
   return (
-    <PageFrame kicker="Events" title="Create event" lede="Capacity and prices are stored on the event.">
-      <form className="desk-form" onSubmit={submit}>
-        <label>Title<input required value={form.title} onChange={set('title')} placeholder="Enter event title" /></label>
-        <label>Description<textarea required value={form.description} onChange={set('description')} placeholder="What is happening" /></label>
-        <label>Venue<input required value={form.venue} onChange={set('venue')} placeholder="Enter venue" /></label>
-        <div className="form-row">
-          <label>Starts<input required type="datetime-local" value={form.startsAt} onChange={set('startsAt')} /></label>
-          <label>Ends<input required type="datetime-local" value={form.endsAt} onChange={set('endsAt')} /></label>
+    <PageFrame kicker="Events" title="Create event" lede="Follow the steps to set up a new event and configure ticketing.">
+      <div style={{ display: 'flex', gap: '3rem', maxWidth: '850px', margin: '2rem auto', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        
+        {/* Vertical Progress Bar */}
+        <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '2.5rem', width: '200px', flexShrink: 0 }}>
+          <div style={{ position: 'absolute', left: '15px', top: '30px', bottom: '30px', width: '2px', background: '#e3efe7', zIndex: 0 }}></div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', position: 'relative', zIndex: 1 }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: step >= 1 ? '#2d6a4f' : '#fff', border: step >= 1 ? 'none' : '2px solid #e3efe7', color: step >= 1 ? '#fff' : '#5e8070', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>1</div>
+            <span style={{ fontWeight: step === 1 ? '700' : '500', color: step === 1 ? '#1b4332' : '#5e8070' }}>Event Details</span>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', position: 'relative', zIndex: 1 }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: step >= 2 ? '#2d6a4f' : '#fff', border: step >= 2 ? 'none' : '2px solid #e3efe7', color: step >= 2 ? '#fff' : '#5e8070', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>2</div>
+            <span style={{ fontWeight: step === 2 ? '700' : '500', color: step === 2 ? '#1b4332' : '#5e8070' }}>Ticketing</span>
+          </div>
         </div>
-        <div className="form-row">
-          <label>Capacity<input required type="number" min="1" value={form.capacity} onChange={set('capacity')} /></label>
-          <label>Status
-            <select value={form.status} onChange={set('status')}>
-              <option value="DRAFT">Draft</option>
-              <option value="PUBLISHED">Published</option>
-            </select>
-          </label>
+
+        {/* Form Container */}
+        <div style={{ flex: 1, minWidth: '300px' }}>
+          <form className="desk-form" onSubmit={submit} style={{ margin: 0, maxWidth: '100%' }}>
+            {step === 1 && (
+              <>
+                <label>Title<input required value={form.title} onChange={set('title')} placeholder="Enter event title" /></label>
+                <label>Description<textarea required value={form.description} onChange={set('description')} placeholder="What is happening" /></label>
+                <div className="form-row">
+                  <label>Venue<input required value={form.venue} onChange={set('venue')} placeholder="Enter venue" /></label>
+                </div>
+                <div className="form-row">
+                  <label>Starts<input required type="datetime-local" value={form.startsAt} onChange={set('startsAt')} /></label>
+                  <label>Ends<input required type="datetime-local" value={form.endsAt} onChange={set('endsAt')} /></label>
+                </div>
+                {error && <p className="desk-error">{error}</p>}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                  <button className="desk-primary" type="button" onClick={nextStep}>Next step</button>
+                </div>
+              </>
+            )}
+
+            {step === 2 && (
+              <>
+                <div className="form-row">
+                  <label>Capacity<input required type="number" min="1" value={form.capacity} onChange={set('capacity')} /></label>
+                </div>
+                <div className="form-row">
+                  <label>Member price<input required type="number" min="0" step="0.01" value={form.memberPrice} onChange={set('memberPrice')} /></label>
+                  <label>Non-member price<input required type="number" min="0" step="0.01" value={form.nonMemberPrice} onChange={set('nonMemberPrice')} /></label>
+                </div>
+                {error && <p className="desk-error">{error}</p>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem' }}>
+                  <button className="ghost-btn" type="button" onClick={() => setStep(1)}>Back</button>
+                  <button className="desk-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Create event'}</button>
+                </div>
+              </>
+            )}
+          </form>
         </div>
-        <div className="form-row">
-          <label>Member price<input required type="number" min="0" step="0.01" value={form.memberPrice} onChange={set('memberPrice')} /></label>
-          <label>Non-member price<input required type="number" min="0" step="0.01" value={form.nonMemberPrice} onChange={set('nonMemberPrice')} /></label>
-        </div>
-        {error && <p className="desk-error">{error}</p>}
-        <button className="desk-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Create event'}</button>
-      </form>
+      </div>
     </PageFrame>
   );
 }
@@ -295,20 +337,6 @@ function EventDetail({ eventId }) {
   const event = useApi(`/events/${eventId}`);
   const stats = useApi(`/events/${eventId}/analytics`);
   const attendance = useApi(`/events/${eventId}/attendance`);
-  const [busy, setBusy] = useState('');
-
-  const setStatus = async (status) => {
-    setBusy(status);
-    try {
-      await api(`/events/${eventId}/status`, { method: 'PATCH', body: { status } });
-      addToast('Event updated', status.toLowerCase(), 'success');
-      event.reload();
-    } catch (err) {
-      addToast('Could not update event', err.message, 'error');
-    } finally {
-      setBusy('');
-    }
-  };
 
   return (
     <PageFrame
@@ -317,9 +345,7 @@ function EventDetail({ eventId }) {
       lede={event.data ? `${whenTime(event.data.startsAt)} · ${event.data.venue}` : ''}
       action={event.data ? (
         <div className="row-actions">
-          {event.data.status !== 'PUBLISHED' && <button type="button" className="desk-primary" disabled={Boolean(busy)} onClick={() => setStatus('PUBLISHED')}>{busy === 'PUBLISHED' ? 'Saving…' : 'Publish'}</button>}
-          {event.data.status === 'PUBLISHED' && <button type="button" className="ghost-btn" disabled={Boolean(busy)} onClick={() => setStatus('COMPLETED')}>Mark completed</button>}
-          {event.data.status !== 'CANCELLED' && <button type="button" className="ghost-btn" disabled={Boolean(busy)} onClick={() => setStatus('CANCELLED')}>Cancel</button>}
+
         </div>
       ) : null}
     >
@@ -328,6 +354,8 @@ function EventDetail({ eventId }) {
           <article><span>Sold</span><strong>{stats.data?.ticketsSold ?? 0}</strong></article>
           <article><span>Checked in</span><strong>{stats.data?.checkedIn ?? 0}</strong></article>
           <article><span>Seats left</span><strong>{stats.data?.remainingSeats ?? '—'}</strong></article>
+          <article><span>Sold (Member)</span><strong>{stats.data?.memberTicketsSold ?? 0}</strong></article>
+          <article><span>Sold (Non-member)</span><strong>{stats.data?.nonMemberTicketsSold ?? 0}</strong></article>
           <article><span>Ticket revenue</span><strong>{money(stats.data?.revenue)}</strong></article>
         </div>
         <h2 className="section-label">Attendance</h2>
@@ -337,6 +365,10 @@ function EventDetail({ eventId }) {
             rows={attendance.data || []}
             columns={[
               { key: 'name', label: 'Name' },
+              { key: 'email', label: 'Email', render: (row) => row.email || '—' },
+              { key: 'ticketType', label: 'Type', render: (row) => row.ticketType === 'MEMBER' ? 'Member' : 'Standard' },
+              { key: 'purchasedAt', label: 'Purchased', render: (row) => whenTime(row.purchasedAt) },
+              { key: 'price', label: 'Paid', render: (row) => money(row.price) },
               { key: 'checkedInAt', label: 'Checked in', render: (row) => whenTime(row.checkedInAt) },
             ]}
           />
@@ -399,6 +431,10 @@ export function TicketsPage({ eventId }) {
               rows={attendance.data || []}
               columns={[
                 { key: 'name', label: 'Name' },
+                { key: 'email', label: 'Email', render: (row) => row.email || '—' },
+                { key: 'ticketType', label: 'Type', render: (row) => row.ticketType === 'MEMBER' ? 'Member' : 'Standard' },
+                { key: 'purchasedAt', label: 'Purchased', render: (row) => whenTime(row.purchasedAt) },
+                { key: 'price', label: 'Paid', render: (row) => money(row.price) },
                 { key: 'checkedInAt', label: 'Time', render: (row) => whenTime(row.checkedInAt) },
               ]}
             />

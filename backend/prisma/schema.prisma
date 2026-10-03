@@ -31,12 +31,6 @@ enum MembershipStatus {
   EXPIRED
 }
 
-enum EventStatus {
-  DRAFT
-  PUBLISHED
-  CANCELLED
-  COMPLETED
-}
 
 enum TicketType {
   MEMBER
@@ -265,7 +259,7 @@ model Event {
   capacity        Int
   memberPrice     Decimal     @db.Decimal(12, 2) @map("member_price")
   nonMemberPrice  Decimal     @db.Decimal(12, 2) @map("non_member_price")
-  status          EventStatus @default(DRAFT)
+
   createdById     String      @map("created_by")
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
@@ -274,7 +268,6 @@ model Event {
   tickets    Ticket[]
   attendance Attendance[]
 
-  @@index([status])
   @@index([startsAt])
   @@map("events")
 }
@@ -476,6 +469,8 @@ model Payment {
   amount             Decimal              @db.Decimal(12, 2)
   currency           String               @db.Char(3)
   status             PaymentStatus        @default(CREATED)
+  razorpayOrderId    String?              @unique @map("razorpay_order_id")
+  razorpayPaymentId  String?              @map("razorpay_payment_id")
   referenceType      PaymentReferenceType @map("reference_type")
   referenceId        String               @map("reference_id")
   createdAt          DateTime             @default(now()) @map("created_at")

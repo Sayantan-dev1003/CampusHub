@@ -1,15 +1,20 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useApi } from '../../admin/useApi';
 import MemberLayout from './MemberLayout';
+import { when, money } from '../../admin/format';
 
 export default function MemberEventsPage() {
-  const { events, navigate } = useApp();
+  const { navigate } = useApp();
+  const query = useApi('/events');
   
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
-  const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' or 'past'
+  const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming', 'ongoing', 'past'
 
-  // Extract unique categories from events
+  const events = query.data || [];
+
+  // Assuming categories might not exist or we mock them if not present. The backend doesn't have a strict category.
   const categories = ['All', ...new Set(events.map(e => e.category).filter(Boolean))];
 
   const filteredEvents = events.filter(event => {
@@ -20,12 +25,13 @@ export default function MemberEventsPage() {
     return matchesSearch && matchesCategory;
   });
 
-  // Mocking "past" and "upcoming" logic by splitting the array for demonstration
-  // In a real app, this would be based on event.date comparing to new Date()
-  const upcomingEvents = filteredEvents.slice(0, Math.ceil(filteredEvents.length * 0.7));
-  const pastEvents = filteredEvents.slice(Math.ceil(filteredEvents.length * 0.7));
+  const now = new Date();
+  
+  const upcomingEvents = filteredEvents.filter(e => new Date(e.startsAt) > now);
+  const ongoingEvents = filteredEvents.filter(e => new Date(e.startsAt) <= now && new Date(e.endsAt) > now);
+  const pastEvents = filteredEvents.filter(e => new Date(e.endsAt) <= now);
 
-  const displayEvents = activeTab === 'upcoming' ? upcomingEvents : pastEvents;
+  const displayEvents = activeTab === 'upcoming' ? upcomingEvents : activeTab === 'ongoing' ? ongoingEvents : pastEvents;
 
   return (
     <MemberLayout>
@@ -68,6 +74,12 @@ export default function MemberEventsPage() {
             Upcoming Events ({upcomingEvents.length})
           </button>
           <button 
+            className={`tab-btn ${activeTab === 'ongoing' ? 'active' : ''}`}
+            onClick={() => setActiveTab('ongoing')}
+          >
+            Ongoing Events ({ongoingEvents.length})
+          </button>
+          <button 
             className={`tab-btn ${activeTab === 'past' ? 'active' : ''}`}
             onClick={() => setActiveTab('past')}
           >
@@ -76,7 +88,11 @@ export default function MemberEventsPage() {
         </div>
 
         {/* Events Grid */}
-        {displayEvents.length > 0 ? (
+        {query.loading ? (
+          <div className="no-events-state">
+            <p>Loading events...</p>
+          </div>
+        ) : displayEvents.length > 0 ? (
           <div className="events-grid">
             {displayEvents.map(event => (
               <div key={event.id} className="event-card">
@@ -93,7 +109,7 @@ export default function MemberEventsPage() {
                       <line x1="8" y1="2" x2="8" y2="6"/>
                       <line x1="3" y1="10" x2="21" y2="10"/>
                     </svg>
-                    <span>{event.date}</span>
+                    <span>{when(event.startsAt)}</span>
                   </div>
                   <div className="info-row">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
@@ -107,11 +123,11 @@ export default function MemberEventsPage() {
                 <div className="event-pricing">
                   <div className="price-item">
                     <span className="price-label">Member</span>
-                    <span className="price-val text-green">₹{event.memberPrice || 300}</span>
+                    <span className="price-val text-green">{money(event.memberPrice)}</span>
                   </div>
                   <div className="price-item">
                     <span className="price-label">Non-member</span>
-                    <span className="price-val">₹{event.nonMemberPrice || 500}</span>
+                    <span className="price-val">{money(event.nonMemberPrice)}</span>
                   </div>
                 </div>
 

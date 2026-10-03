@@ -43,7 +43,7 @@ async function serializeEvent(event, user, taken, knownMembership) {
     remainingSeats: event.capacity - used,
     memberPrice: money(event.memberPrice),
     nonMemberPrice: money(event.nonMemberPrice),
-    status: event.status,
+
     createdById: event.createdById,
     createdAt: event.createdAt,
   };
@@ -60,8 +60,7 @@ async function listEvents(user, query) {
   const { page, limit, skip } = pageParams(query);
   const where = {};
   const isAdmin = user?.role === 'ADMIN';
-  if (!isAdmin) where.status = 'PUBLISHED';
-  else if (query.status) where.status = query.status;
+
   if (query.search) where.title = { contains: query.search, mode: 'insensitive' };
   if (query.date) {
     const day = new Date(query.date);
@@ -87,9 +86,7 @@ async function listEvents(user, query) {
 async function getEvent(eventId, user) {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) throw new ApiError(404, 'Event not found', 'NOT_FOUND');
-  if (event.status !== 'PUBLISHED' && user?.role !== 'ADMIN') {
-    throw new ApiError(404, 'Event not found', 'NOT_FOUND');
-  }
+
   return serializeEvent(event, user);
 }
 
@@ -97,8 +94,9 @@ async function createEvent(userId, input) {
   if (new Date(input.endsAt) <= new Date(input.startsAt)) {
     throw new ApiError(400, 'Event end must be after the start', 'VALIDATION_ERROR');
   }
+  delete input.status;
   const event = await prisma.event.create({
-    data: { ...input, createdById: userId, status: input.status || 'DRAFT' },
+    data: { ...input, createdById: userId },
   });
   return serializeEvent(event, { id: userId, role: 'ADMIN' });
 }
@@ -121,38 +119,13 @@ async function updateEvent(eventId, input) {
   return serializeEvent(event, { id: existing.createdById, role: 'ADMIN' });
 }
 
-async function updateEventStatus(eventId, status) {
-  const existing = await prisma.event.findUnique({ where: { id: eventId } });
-  if (!existing) throw new ApiError(404, 'Event not found', 'NOT_FOUND');
-  if (status !== 'CANCELLED') return updateEvent(eventId, { status });
 
-  await prisma.runTransaction(async (tx) => {
-    await tx.event.update({ where: { id: eventId }, data: { status: 'CANCELLED' } });
-    const pending = await tx.ticket.findMany({
-      where: { eventId, status: 'PENDING' },
-      select: { paymentId: true },
-    });
-    await tx.ticket.updateMany({
-      where: { eventId, status: 'PENDING' },
-      data: { status: 'CANCELLED' },
-    });
-    const paymentIds = pending.map((ticket) => ticket.paymentId).filter(Boolean);
-    if (paymentIds.length) {
-      await tx.payment.updateMany({
-        where: { id: { in: paymentIds }, status: 'CREATED' },
-        data: { status: 'FAILED' },
-      });
-    }
-  });
-  const event = await prisma.event.findUnique({ where: { id: eventId } });
-  return serializeEvent(event, { id: event.createdById, role: 'ADMIN' });
-}
 
 async function analytics(eventId) {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) throw new ApiError(404, 'Event not found', 'NOT_FOUND');
   const ticketIds = (await prisma.ticket.findMany({ where: { eventId }, select: { id: true } })).map((ticket) => ticket.id);
-  const [sold, checkedIn, revenue] = await Promise.all([
+  const [sold, checkedIn, revenue, soldMember, soldNonMember] = await Promise.all([
     prisma.ticket.count({ where: { eventId, status: { in: ['PAID', 'USED'] } } }),
     prisma.attendance.count({ where: { eventId } }),
     ticketIds.length
@@ -167,12 +140,16 @@ async function analytics(eventId) {
           _sum: { amount: true },
         })
       : Promise.resolve({ _sum: { amount: 0 } }),
+    prisma.ticket.count({ where: { eventId, status: { in: ['PAID', 'USED'] }, ticketType: 'MEMBER' } }),
+    prisma.ticket.count({ where: { eventId, status: { in: ['PAID', 'USED'] }, ticketType: 'NON_MEMBER' } }),
   ]);
   const taken = await seatsTaken(eventId);
   return {
     capacity: event.capacity,
     remainingSeats: event.capacity - taken,
     ticketsSold: sold,
+    memberTicketsSold: soldMember,
+    nonMemberTicketsSold: soldNonMember,
     checkedIn,
     revenue: money(revenue._sum.amount) || 0,
   };
@@ -186,7 +163,7 @@ module.exports = {
   getEvent,
   createEvent,
   updateEvent,
-  updateEventStatus,
+
   analytics,
   serializeEvent,
 };

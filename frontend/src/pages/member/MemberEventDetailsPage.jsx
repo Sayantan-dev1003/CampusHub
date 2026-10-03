@@ -1,15 +1,29 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useApi } from '../../admin/useApi';
+import { api } from '../../services/api';
 import MemberLayout from './MemberLayout';
+import { when, whenTime, money } from '../../admin/format';
 
 export default function MemberEventDetailsPage() {
-  const { currentRoute, events, user, addToast, navigate } = useApp();
+  const { currentRoute, user, addToast, navigate, triggerConfetti } = useApp();
   
   const eventId = currentRoute.params?.id;
-  const event = events.find(e => e.id === eventId) || events[0]; // Fallback to first event if not found
+  const query = useApi(eventId ? `/events/${eventId}` : null);
+  const event = query.data;
 
   const [quantity, setQuantity] = useState(1);
-  const [ticketType, setTicketType] = useState(user?.isMember !== false ? 'member' : 'non-member');
+  const [busy, setBusy] = useState(false);
+
+  if (query.loading) {
+    return (
+      <MemberLayout>
+        <div className="dashboard-content">
+          <h2>Loading...</h2>
+        </div>
+      </MemberLayout>
+    );
+  }
 
   if (!event) {
     return (
@@ -21,16 +35,41 @@ export default function MemberEventDetailsPage() {
     );
   }
 
-  // Mock Pricing Logic
-  const memberPrice = event.memberPrice || 300;
-  const nonMemberPrice = event.nonMemberPrice || 500;
-  const pricePerTicket = ticketType === 'member' ? memberPrice : nonMemberPrice;
+  const ticketType = event.viewerTicketType === 'MEMBER' ? 'Member' : 'Standard';
+  const pricePerTicket = event.viewerPrice;
   const totalPrice = pricePerTicket * quantity;
+  const isSoldOut = event.remainingSeats === 0;
 
-  const handlePayment = () => {
-    // Mock successful payment and ticket generation
-    addToast('Payment Successful!', `Successfully purchased ${quantity} ticket(s) for ${event.title}.`, 'success');
-    navigate('member-tickets');
+  const handlePayment = async () => {
+    setBusy(true);
+    try {
+      // Step 1: Create Order
+      const res = await api('/payments/orders', {
+        method: 'POST',
+        body: { purpose: 'TICKET', eventId: event.id, quantity },
+      });
+      const orderData = res.data;
+
+      // Step 2: Verify Mock Payment if not already confirmed
+      if (!orderData.confirmed) {
+        await api('/payments/verify', {
+          method: 'POST',
+          body: {
+            razorpayOrderId: orderData.razorpayOrderId,
+            razorpayPaymentId: 'mock_pay_123',
+            razorpaySignature: 'mock_signature_123',
+          },
+        });
+      }
+
+      triggerConfetti();
+      addToast('Payment Successful!', `Successfully purchased ${quantity} ticket(s) for ${event.title}.`, 'success');
+      navigate('member-tickets');
+    } catch (err) {
+      addToast('Purchase failed', err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -67,7 +106,7 @@ export default function MemberEventDetailsPage() {
                     <line x1="8" y1="2" x2="8" y2="6"/>
                     <line x1="3" y1="10" x2="21" y2="10"/>
                   </svg>
-                  <span>{event.date}</span>
+                  <span>{whenTime(event.startsAt)}</span>
                 </div>
                 <div className="meta-item">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -80,7 +119,7 @@ export default function MemberEventDetailsPage() {
 
               <div className="event-description">
                 <h3>About This Event</h3>
-                <p>Join us for the {event.title}! This is a placeholder description that provides all the necessary details about the event. It's a great opportunity to connect, learn, and experience everything CampusHub has to offer. Make sure to book your tickets early as seats are limited!</p>
+                <p>{event.description || `Join us for the ${event.title}! This is a placeholder description that provides all the necessary details about the event.`}</p>
               </div>
             </div>
           </div>
@@ -91,69 +130,58 @@ export default function MemberEventDetailsPage() {
               <h2>Purchase Tickets</h2>
               
               <div className="seats-info">
-                <span className="seats-dot"></span>
-                <strong>{event.availableSeats || 120} seats available</strong>
+                <span className="seats-dot" style={{ background: isSoldOut ? '#e63946' : '#52b788', boxShadow: isSoldOut ? '0 0 0 4px rgba(230, 57, 70, 0.2)' : '0 0 0 4px rgba(82, 183, 136, 0.2)' }}></span>
+                <strong style={{ color: isSoldOut ? '#e63946' : 'inherit' }}>{isSoldOut ? 'Sold Out' : `${event.remainingSeats} seats available`}</strong>
               </div>
 
               <div className="ticket-options">
-                <label className={`ticket-option ${ticketType === 'member' ? 'selected' : ''}`}>
+                <label className="ticket-option selected">
                   <div className="option-radio">
                     <input 
                       type="radio" 
                       name="ticketType" 
-                      value="member" 
-                      checked={ticketType === 'member'}
-                      onChange={() => setTicketType('member')}
-                      disabled={user?.isMember === false} // Restrict if real auth says non-member
+                      value="selected" 
+                      checked
+                      readOnly
                     />
                   </div>
                   <div className="option-details">
-                    <span className="option-name">Member Ticket</span>
-                    <span className="option-desc">Exclusive pricing for active members.</span>
+                    <span className="option-name">{ticketType} Ticket</span>
+                    <span className="option-desc">
+                      {event.viewerTicketType === 'MEMBER' ? 'Exclusive pricing for active members.' : 'General admission for non-members.'}
+                    </span>
                   </div>
-                  <div className="option-price">₹{memberPrice}</div>
-                </label>
-
-                <label className={`ticket-option ${ticketType === 'non-member' ? 'selected' : ''}`}>
-                  <div className="option-radio">
-                    <input 
-                      type="radio" 
-                      name="ticketType" 
-                      value="non-member" 
-                      checked={ticketType === 'non-member'}
-                      onChange={() => setTicketType('non-member')}
-                    />
-                  </div>
-                  <div className="option-details">
-                    <span className="option-name">Standard Ticket</span>
-                    <span className="option-desc">General admission for non-members.</span>
-                  </div>
-                  <div className="option-price">₹{nonMemberPrice}</div>
+                  <div className="option-price">{money(pricePerTicket)}</div>
                 </label>
               </div>
 
               <div className="quantity-selector">
                 <label>Quantity</label>
                 <div className="qty-controls">
-                  <button onClick={() => setQuantity(Math.max(1, quantity - 1))}>-</button>
-                  <input type="number" value={quantity} readOnly />
-                  <button onClick={() => setQuantity(Math.min(10, quantity + 1))}>+</button>
+                  <button disabled={isSoldOut} onClick={() => setQuantity(Math.max(1, quantity - 1))}>-</button>
+                  <input type="number" value={isSoldOut ? 0 : quantity} readOnly />
+                  <button disabled={isSoldOut} onClick={() => setQuantity(Math.min(Math.min(10, event.remainingSeats), quantity + 1))}>+</button>
                 </div>
               </div>
 
               <div className="purchase-summary">
                 <div className="summary-row">
-                  <span>{quantity} × {ticketType === 'member' ? 'Member' : 'Standard'} Ticket</span>
-                  <span>₹{totalPrice}</span>
+                  <span>{isSoldOut ? 0 : quantity} × {ticketType} Ticket</span>
+                  <span>{money(isSoldOut ? 0 : totalPrice)}</span>
                 </div>
                 <div className="summary-row total">
                   <span>Total Amount</span>
-                  <span>₹{totalPrice}</span>
+                  <span>{money(isSoldOut ? 0 : totalPrice)}</span>
                 </div>
               </div>
 
-              <button className="btn-primary btn-pay w-100" onClick={handlePayment}>
-                Pay ₹{totalPrice} & Generate Ticket
+              <button 
+                className="btn-primary btn-pay w-100" 
+                onClick={handlePayment} 
+                disabled={isSoldOut || busy}
+                style={{ opacity: (isSoldOut || busy) ? 0.6 : 1, cursor: (isSoldOut || busy) ? 'not-allowed' : 'pointer', background: isSoldOut ? '#e63946' : '#2d6a4f' }}
+              >
+                {isSoldOut ? 'Sold Out' : busy ? 'Processing...' : `Pay ${money(totalPrice)} & Generate Ticket`}
               </button>
             </div>
           </div>

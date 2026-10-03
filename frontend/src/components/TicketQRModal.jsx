@@ -6,35 +6,67 @@ export default function TicketQRModal({ ticket, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content ticket-modal" onClick={e => e.stopPropagation()}>
-        <button className="btn-close" onClick={onClose}>×</button>
         
-        <div className="ticket-header">
-          <h2>{ticket.eventName || 'Event'}</h2>
-        </div>
-        
-        <div className="qr-container">
-          <svg viewBox="0 0 100 100" className="qr-code">
-            <rect width="100" height="100" fill="#fff" />
-            <path d="M10,10 h20 v20 h-20 z M15,15 h10 v10 h-10 z" fill="#1b4332"/>
-            <path d="M70,10 h20 v20 h-20 z M75,15 h10 v10 h-10 z" fill="#1b4332"/>
-            <path d="M10,70 h20 v20 h-20 z M15,75 h10 v10 h-10 z" fill="#1b4332"/>
-            <rect x="40" y="10" width="20" height="10" fill="#1b4332" />
-            <rect x="10" y="40" width="10" height="20" fill="#1b4332" />
-            <rect x="40" y="40" width="30" height="30" fill="#1b4332" />
-            <rect x="70" y="50" width="20" height="10" fill="#1b4332" />
-            <rect x="80" y="70" width="10" height="20" fill="#1b4332" />
-            <rect x="30" y="80" width="30" height="10" fill="#1b4332" />
-          </svg>
+        <div className="modal-top">
+          <div className="status-badge-inline">Valid Ticket</div>
+          <button className="btn-close" onClick={onClose}>
+            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
         </div>
 
-        <div className="ticket-details">
-          <p><strong>Ticket ID:</strong> {ticket.id}</p>
-          <p><strong>Name:</strong> {ticket.userName || 'Member Name'}</p>
-          <p><strong>Date:</strong> {ticket.date}</p>
-          <p><strong>Venue:</strong> {ticket.venue || 'Main Auditorium'}</p>
-          
-          <div className="ticket-status valid">
-            STATUS: VALID
+        <div className="modal-header">
+          <h2>{ticket.eventName || 'Event'}</h2>
+          <p>{ticket.venue || 'Main Auditorium'} • {ticket.date}</p>
+        </div>
+
+        <div className="qr-section">
+          <div className="qr-frame">
+            <svg viewBox="0 0 100 100" className="qr-code">
+               <rect x="10" y="10" width="25" height="25" rx="3" fill="none" stroke="#1b4332" strokeWidth="4"/>
+               <rect x="15" y="15" width="15" height="15" rx="2" fill="#1b4332" />
+               <rect x="65" y="10" width="25" height="25" rx="3" fill="none" stroke="#1b4332" strokeWidth="4"/>
+               <rect x="70" y="15" width="15" height="15" rx="2" fill="#1b4332" />
+               <rect x="10" y="65" width="25" height="25" rx="3" fill="none" stroke="#1b4332" strokeWidth="4"/>
+               <rect x="15" y="70" width="15" height="15" rx="2" fill="#1b4332" />
+               
+               <rect x="45" y="10" width="10" height="10" rx="1" fill="#1b4332" />
+               <rect x="45" y="25" width="10" height="10" rx="1" fill="#1b4332" />
+               <rect x="10" y="45" width="10" height="10" rx="1" fill="#1b4332" />
+               <rect x="25" y="45" width="25" height="10" rx="1" fill="#1b4332" />
+               <rect x="60" y="45" width="30" height="10" rx="1" fill="#1b4332" />
+               <rect x="45" y="60" width="10" height="30" rx="1" fill="#1b4332" />
+               <rect x="65" y="65" width="10" height="10" rx="1" fill="#1b4332" />
+               <rect x="80" y="65" width="10" height="10" rx="1" fill="#1b4332" />
+               <rect x="65" y="80" width="25" height="10" rx="1" fill="#1b4332" />
+            </svg>
+          </div>
+        </div>
+        
+        <div className="qr-token-display">
+          <span className="token-label">CHECK-IN TOKEN</span>
+          <code className="token-value" title="Click to copy" onClick={(e) => {
+            navigator.clipboard.writeText(ticket.qrCodeData);
+            e.target.style.background = '#d3e6da';
+            setTimeout(() => e.target.style.background = '#f4f8f5', 500);
+          }}>
+            {ticket.qrCodeData}
+          </code>
+        </div>
+
+        <div className="ticket-divider"></div>
+
+        <div className="ticket-details-grid">
+          <div className="detail-item">
+            <span className="label">Attendee</span>
+            <span className="value">{ticket.userName || 'Member Name'}</span>
+          </div>
+          <div className="detail-item">
+            <span className="label">Ticket Type</span>
+            <span className="value">{ticket.type === 'MEMBER' ? 'Member' : 'Standard'}</span>
+          </div>
+          <div className="detail-item full">
+            <span className="label">Ticket ID</span>
+            <span className="value id">{ticket.id.toUpperCase()}</span>
           </div>
         </div>
       </div>
@@ -43,8 +75,8 @@ export default function TicketQRModal({ ticket, onClose }) {
         .modal-overlay {
           position: fixed;
           top: 0; left: 0; right: 0; bottom: 0;
-          background: rgba(27, 67, 50, 0.7);
-          backdrop-filter: blur(4px);
+          background: rgba(27, 67, 50, 0.75);
+          backdrop-filter: blur(8px);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -53,82 +85,183 @@ export default function TicketQRModal({ ticket, onClose }) {
         }
 
         .ticket-modal {
-          background: #fff;
-          border-radius: 20px;
+          background: #ffffff;
+          border-radius: 24px;
           width: 100%;
-          max-width: 400px;
+          max-width: 420px;
           position: relative;
           overflow: hidden;
-          box-shadow: 0 24px 50px rgba(0,0,0,0.2);
+          box-shadow: 0 32px 64px rgba(0,0,0,0.3);
           text-align: center;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .modal-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 20px 24px 0;
+        }
+
+        .status-badge-inline {
+          background: #eaf5ed;
+          color: #2d6a4f;
+          padding: 6px 12px;
+          border-radius: 20px;
+          font-size: 0.8rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 1px;
         }
 
         .btn-close {
-          position: absolute;
-          top: 16px;
-          right: 16px;
-          background: rgba(255,255,255,0.2);
+          background: #f4f8f5;
           border: none;
-          color: #fff;
-          font-size: 1.5rem;
-          width: 32px;
-          height: 32px;
+          color: #5e8070;
+          width: 36px;
+          height: 36px;
           border-radius: 50%;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
+          transition: all 0.2s;
         }
-        .btn-close:hover { background: rgba(255,255,255,0.4); }
+        .btn-close:hover {
+          background: #e2ece6;
+          color: #1b4332;
+          transform: rotate(90deg);
+        }
 
-        .ticket-header {
-          background: #1b4332;
-          padding: 32px 24px 40px;
-          color: #fff;
+        .modal-header {
+          padding: 16px 32px 16px;
         }
-        .ticket-header h2 {
-          font-family: 'Fraunces', serif;
-          font-size: 1.5rem;
+        .modal-header h2 {
+          font-family: 'Fraunces', Georgia, serif;
+          font-size: 1.8rem;
+          color: #1b4332;
+          margin: 0 0 8px 0;
+          line-height: 1.2;
+        }
+        .modal-header p {
+          color: #5e8070;
           margin: 0;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
+          font-size: 0.95rem;
+          font-weight: 500;
         }
 
-        .qr-container {
+        .qr-section {
+          padding: 16px 32px 24px;
+          display: flex;
+          justify-content: center;
+        }
+
+        .qr-frame {
           background: #fff;
-          margin: -24px auto 24px;
-          padding: 16px;
-          border-radius: 12px;
+          padding: 20px;
+          border-radius: 20px;
+          box-shadow: 0 8px 24px rgba(27, 67, 50, 0.08), inset 0 0 0 1px rgba(45,106,79,0.1);
           width: 200px;
           height: 200px;
-          box-shadow: 0 4px 12px rgba(27, 67, 50, 0.1);
-          border: 1px solid #e2ece6;
+          position: relative;
         }
+        .qr-frame::before, .qr-frame::after {
+          content: ''; position: absolute; width: 24px; height: 24px; border: 3px solid #2d6a4f; border-radius: 4px;
+        }
+        .qr-frame::before { top: 12px; left: 12px; border-right: none; border-bottom: none; }
+        .qr-frame::after { bottom: 12px; right: 12px; border-left: none; border-top: none; }
+
         .qr-code { width: 100%; height: 100%; }
 
-        .ticket-details {
+        .qr-token-display {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
           padding: 0 32px 32px;
         }
-        .ticket-details p {
-          margin: 0 0 12px 0;
-          color: #3b5a4a;
-          font-size: 1.05rem;
-          display: flex;
-          justify-content: space-between;
-          border-bottom: 1px dashed #e2ece6;
-          padding-bottom: 8px;
+        .token-label {
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: #5e8070;
+          letter-spacing: 1px;
         }
-        .ticket-details strong { color: #1b4332; }
+        .token-value {
+          background: #f4f8f5;
+          padding: 12px 16px;
+          border-radius: 12px;
+          font-family: monospace;
+          font-size: 0.95rem;
+          color: #1b4332;
+          border: 1px solid rgba(45,106,79,0.15);
+          cursor: pointer;
+          user-select: all;
+          transition: all 0.2s;
+          width: 100%;
+          box-sizing: border-box;
+          word-break: break-all;
+          line-height: 1.4;
+        }
+        .token-value:hover {
+          background: #e2ece6;
+          border-color: rgba(45,106,79,0.3);
+        }
 
-        .ticket-status.valid {
-          margin-top: 24px;
-          background: #eaf5ed;
-          color: #2d6a4f;
-          padding: 12px;
-          border-radius: 8px;
-          font-weight: 800;
-          letter-spacing: 0.05em;
-          border: 2px solid #52b788;
+        .ticket-divider {
+          height: 0;
+          border-top: 2px dashed #d3e6da;
+          margin: 0;
+          position: relative;
+        }
+        .ticket-divider::before, .ticket-divider::after {
+          content: '';
+          position: absolute;
+          top: -12px;
+          width: 24px;
+          height: 24px;
+          background: rgba(27, 67, 50, 0.75);
+          border-radius: 50%;
+        }
+        .ticket-divider::before { left: -12px; }
+        .ticket-divider::after { right: -12px; }
+
+        .ticket-details-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+          padding: 32px;
+          background: #fbfefc;
+          text-align: left;
+        }
+        .detail-item {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .detail-item.full {
+          grid-column: span 2;
+        }
+        .detail-item .label {
+          font-size: 0.75rem;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: #5e8070;
+          font-weight: 700;
+        }
+        .detail-item .value {
+          font-size: 1rem;
+          font-weight: 600;
+          color: #1b4332;
+        }
+        .detail-item .value.id {
+          font-family: monospace;
+          background: #e2ece6;
+          padding: 4px 8px;
+          border-radius: 6px;
+          font-size: 0.95rem;
+          display: inline-block;
+          width: fit-content;
         }
       `}</style>
     </div>

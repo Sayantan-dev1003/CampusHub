@@ -149,9 +149,7 @@ router.get('/events/:eventId/attendance', requireAuth, admin, asyncHandler(async
 router.get('/events/:eventId', optionalAuth, asyncHandler(async (req, res) => {
   sendData(res, await events.getEvent(req.params.eventId, req.user));
 }));
-router.patch('/events/:eventId/status', requireAuth, admin, validateBody(schemas.eventStatusSchema), asyncHandler(async (req, res) => {
-  sendData(res, await events.updateEventStatus(req.params.eventId, req.body.status), 'Event status updated');
-}));
+
 router.patch('/events/:eventId', requireAuth, admin, validateBody(schemas.eventPatchSchema), asyncHandler(async (req, res) => {
   const data = { ...req.body };
   if (data.startsAt) data.startsAt = new Date(data.startsAt);

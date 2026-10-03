@@ -72,14 +72,12 @@ const eventSchema = z.object({
   capacity: z.number().int().positive(),
   memberPrice: z.number().nonnegative(),
   nonMemberPrice: z.number().nonnegative(),
-  status: z.enum(['DRAFT', 'PUBLISHED', 'CANCELLED', 'COMPLETED']).optional(),
+
 });
 
 const eventPatchSchema = eventSchema.partial();
 
-const eventStatusSchema = z.object({
-  status: z.enum(['DRAFT', 'PUBLISHED', 'CANCELLED', 'COMPLETED']),
-});
+
 
 const paymentOrderSchema = z.discriminatedUnion('purpose', [
   z.object({ purpose: z.literal('MEMBERSHIP'), planId: z.string().min(1) }),
@@ -198,7 +196,7 @@ module.exports = {
   planPatchSchema,
   eventSchema,
   eventPatchSchema,
-  eventStatusSchema,
+
   paymentOrderSchema,
   verifySchema,
   checkInSchema,

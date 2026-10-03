@@ -120,6 +120,8 @@ export function AppProvider({ children }) {
       if (['home', 'events', 'store', 'about', 'login', 'register'].includes(page) || page.startsWith('member-')) {
         if (page === 'events' && paramId) {
           setCurrentRoute({ page: 'event-details', params: { id: paramId } });
+        } else if (page === 'member-event-details' && paramId) {
+          setCurrentRoute({ page: 'member-event-details', params: { id: paramId } });
         } else if (page === 'store' && paramId) {
           setCurrentRoute({ page: 'product-details', params: { id: paramId } });
         } else {
@@ -143,6 +145,8 @@ export function AppProvider({ children }) {
     let hash = page;
     if (page === 'event-details' && params.id) {
       hash = `events/${params.id}`;
+    } else if (page === 'member-event-details' && params.id) {
+      hash = `member-event-details/${params.id}`;
     } else if (page === 'product-details' && params.id) {
       hash = `store/${params.id}`;
     } else if (page === 'admin') {

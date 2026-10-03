@@ -103,7 +103,7 @@ export default function MemberDashboardPage() {
                       </p>
                     </div>
                     <div className="event-actions">
-                      <button className="btn-primary" onClick={() => navigate('event-details', { id: event.id })}>
+                      <button className="btn-primary" onClick={() => navigate('member-event-details', { id: event.id })}>
                         Register
                       </button>
                     </div>

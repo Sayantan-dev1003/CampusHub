@@ -16,6 +16,16 @@ import AboutPage from './pages/AboutPage';
 import AuthPage from './pages/AuthPage';
 import MemberDashboardPage from './pages/member/MemberDashboardPage';
 import MemberProfilePage from './pages/member/MemberProfilePage';
+import MemberMembershipPage from './pages/member/MemberMembershipPage';
+import MemberEventsPage from './pages/member/MemberEventsPage';
+import MemberEventDetailsPage from './pages/member/MemberEventDetailsPage';
+import MemberTicketsPage from './pages/member/MemberTicketsPage';
+import MemberStorePage from './pages/member/MemberStorePage';
+import MemberCheckoutPage from './pages/member/MemberCheckoutPage';
+import MemberOrdersPage from './pages/member/MemberOrdersPage';
+import MemberAnnouncementsPage from './pages/member/MemberAnnouncementsPage';
+import MemberVolunteerPage from './pages/member/MemberVolunteerPage';
+import MemberNotificationsPage from './pages/member/MemberNotificationsPage';
 import MemberLayout from './pages/member/MemberLayout';
 
 import './styles/theme.css';
@@ -46,19 +56,25 @@ function AppContent() {
       case 'member-profile':
         return <MemberProfilePage />;
       case 'member-membership':
+        return <MemberMembershipPage />;
+      case 'member-events':
+        return <MemberEventsPage />;
+      case 'member-event-details':
+        return <MemberEventDetailsPage />;
       case 'member-tickets':
+        return <MemberTicketsPage />;
+      case 'member-store':
+        return <MemberStorePage />;
+      case 'member-checkout':
+        return <MemberCheckoutPage />;
       case 'member-orders':
+        return <MemberOrdersPage />;
       case 'member-announcements':
+        return <MemberAnnouncementsPage />;
       case 'member-volunteer':
+        return <MemberVolunteerPage />;
       case 'member-notifications':
-        return (
-          <MemberLayout>
-            <div style={{ padding: '40px' }}>
-              <h2>Page Under Construction</h2>
-              <p>This section is coming soon.</p>
-            </div>
-          </MemberLayout>
-        );
+        return <MemberNotificationsPage />;
       default:
         return <HomePage />;
     }

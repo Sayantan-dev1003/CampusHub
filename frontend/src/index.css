@@ -1,0 +1,7 @@
+/* Base Reset & Theme Import */
+@import './styles/theme.css';
+
+#root {
+  min-height: 100vh;
+  width: 100%;
+}

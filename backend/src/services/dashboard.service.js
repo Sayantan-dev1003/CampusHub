@@ -1,0 +1,114 @@
+const prisma = require('../lib/prisma');
+const { money } = require('../lib/money');
+const { currentMembership, membershipSummary } = require('./auth.service');
+const finance = require('./finance.service');
+
+async function memberDashboard(user) {
+  const now = new Date();
+  const [membership, upcomingEventCount, upcomingEvents, ticketCount, tickets, announcements, orders, openTaskCount, tasks, unread] = await Promise.all([
+    currentMembership(user.id),
+    prisma.event.count({ where: { status: 'PUBLISHED', startsAt: { gte: now } } }),
+    prisma.event.findMany({
+      where: { status: 'PUBLISHED', startsAt: { gte: now } },
+      orderBy: { startsAt: 'asc' },
+      take: 5,
+    }),
+    prisma.ticket.count({ where: { userId: user.id, status: { in: ['PAID', 'USED'] } } }),
+    prisma.ticket.findMany({
+      where: { userId: user.id, status: { in: ['PAID', 'USED'] } },
+      include: { event: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    }),
+    prisma.announcement.findMany({
+      where: { status: 'PUBLISHED', audience: { in: ['PUBLIC', 'MEMBERS'] } },
+      orderBy: { publishedAt: 'desc' },
+      take: 5,
+    }),
+    prisma.order.findMany({ where: { userId: user.id }, orderBy: { createdAt: 'desc' }, take: 5 }),
+    user.isVolunteer
+      ? prisma.task.count({ where: { assignedToId: user.id, status: { in: ['TODO', 'IN_PROGRESS'] } } })
+      : Promise.resolve(0),
+    user.isVolunteer
+      ? prisma.task.findMany({
+          where: { assignedToId: user.id, status: { in: ['TODO', 'IN_PROGRESS'] } },
+          orderBy: { dueDate: 'asc' },
+          take: 5,
+        })
+      : Promise.resolve([]),
+    prisma.notification.count({ where: { userId: user.id, isRead: false } }),
+  ]);
+  return {
+    membership: membershipSummary(membership),
+    upcomingEventCount,
+    upcomingEvents: upcomingEvents.map((event) => ({
+      id: event.id,
+      title: event.title,
+      startsAt: event.startsAt,
+      venue: event.venue,
+    })),
+    ticketCount,
+    tickets: tickets.map((ticket) => ({
+      id: ticket.id,
+      status: ticket.status,
+      eventTitle: ticket.event.title,
+      startsAt: ticket.event.startsAt,
+    })),
+    announcements: announcements.map((row) => ({
+      id: row.id,
+      title: row.title,
+      publishedAt: row.publishedAt,
+    })),
+    orders: orders.map((order) => ({
+      id: order.id,
+      orderStatus: order.orderStatus,
+      paymentStatus: order.paymentStatus,
+      totalAmount: money(order.totalAmount),
+    })),
+    openTaskCount,
+    tasks: tasks.map((task) => ({ id: task.id, title: task.title, status: task.status, dueDate: task.dueDate })),
+    unreadNotifications: unread,
+  };
+}
+
+async function adminDashboard() {
+  const now = new Date();
+  const [
+    totalMembers,
+    activeMemberships,
+    upcomingEvents,
+    ticketsSold,
+    openOrders,
+    variants,
+    openTasks,
+    pendingExpenses,
+    revenue,
+  ] = await Promise.all([
+    prisma.user.count({ where: { role: 'MEMBER' } }),
+    prisma.membership.count({ where: { status: 'ACTIVE', endDate: { gte: now } } }),
+    prisma.event.count({ where: { status: 'PUBLISHED', startsAt: { gte: now } } }),
+    prisma.ticket.count({ where: { status: { in: ['PAID', 'USED'] } } }),
+    prisma.order.count({ where: { orderStatus: { in: ['PAID', 'PROCESSING', 'READY'] } } }),
+    prisma.productVariant.findMany({ select: { stockQuantity: true, lowStockThreshold: true } }),
+    prisma.task.count({ where: { status: { in: ['TODO', 'IN_PROGRESS'] } } }),
+    prisma.expense.count({ where: { status: 'PENDING' } }),
+    prisma.transaction.aggregate({ where: { status: 'POSTED', type: 'INCOME' }, _sum: { amount: true } }),
+  ]);
+  return {
+    totalMembers,
+    activeMemberships,
+    upcomingEvents,
+    ticketsSold,
+    openOrders,
+    lowStockCount: variants.filter((variant) => variant.stockQuantity <= variant.lowStockThreshold).length,
+    openTasks,
+    pendingExpenses,
+    revenue: money(revenue._sum.amount) || 0,
+  };
+}
+
+async function financeDashboard() {
+  return finance.summary();
+}
+
+module.exports = { memberDashboard, adminDashboard, financeDashboard };

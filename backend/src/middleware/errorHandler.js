@@ -1,33 +1,59 @@
-const notFound = (req, res, next) => {
-  const error = new Error(`Route not found: ${req.originalUrl}`);
-  res.status(404);
-  next(error);
-};
+const { Prisma } = require('@prisma/client');
+const { ApiError } = require('../lib/errors');
+const { env } = require('../config/env');
 
-const errorHandler = (err, req, res, next) => {
-  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+function errorHandler(err, req, res, next) {
+  if (res.headersSent) return next(err);
 
-  // Prisma known errors
-  if (err.code === 'P2002') {
-    return res.status(409).json({
+  if (err instanceof ApiError) {
+    return res.status(err.status).json({
       success: false,
-      message: 'A record with this value already exists.',
-      field: err.meta?.target,
+      message: err.message,
+      errorCode: err.errorCode,
     });
   }
 
-  if (err.code === 'P2025') {
-    return res.status(404).json({
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === 'P2002') {
+      return res.status(409).json({
+        success: false,
+        message: 'A record with that value already exists',
+        errorCode: 'CONFLICT',
+      });
+    }
+    if (err.code === 'P2034') {
+      return res.status(409).json({
+        success: false,
+        message: 'Please retry the request',
+        errorCode: 'CONFLICT',
+      });
+    }
+    if (err.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        message: 'Record not found',
+        errorCode: 'NOT_FOUND',
+      });
+    }
+  }
+
+  if (err.name === 'MulterError') {
+    return res.status(400).json({
       success: false,
-      message: 'Record not found.',
+      message: err.message,
+      errorCode: 'VALIDATION_ERROR',
     });
   }
 
-  res.status(statusCode).json({
+  if (env.nodeEnv !== 'production') {
+    console.error(err);
+  }
+
+  return res.status(500).json({
     success: false,
-    message: err.message || 'Internal Server Error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    message: 'Internal server error',
+    errorCode: 'INTERNAL_ERROR',
   });
-};
+}
 
-module.exports = { notFound, errorHandler };
+module.exports = errorHandler;

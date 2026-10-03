@@ -1,15 +1,15 @@
-const { validationResult } = require('express-validator');
+const { ApiError } = require('../lib/errors');
 
-const validate = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(422).json({
-      success: false,
-      message: 'Validation failed',
-      errors: errors.array().map((e) => ({ field: e.path, message: e.msg })),
-    });
-  }
-  next();
-};
+function validateBody(schema) {
+  return (req, res, next) => {
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      const message = parsed.error.issues.map((issue) => issue.message).join('; ');
+      return next(new ApiError(400, message, 'VALIDATION_ERROR'));
+    }
+    req.body = parsed.data;
+    return next();
+  };
+}
 
-module.exports = { validate };
+module.exports = { validateBody };

@@ -1,106 +1,111 @@
-const prisma = require('../config/db');
+const prisma = require('../lib/prisma');
+const { ApiError } = require('../lib/errors');
+const { money } = require('../lib/money');
 
-/**
- * Create a new membership for a member
- */
-const createMembership = async ({ memberId, membershipType, duesAmount, startDate, expiryDate, benefits }, createdById) => {
-  const member = await prisma.member.findUnique({ where: { id: memberId } });
-  if (!member) throw Object.assign(new Error('Member not found'), { statusCode: 404 });
-
-  // Check for existing active membership
-  const existing = await prisma.membership.findFirst({
-    where: { memberId, status: 'ACTIVE', expiryDate: { gt: new Date() } },
-  });
-  if (existing) throw Object.assign(new Error('Member already has an active membership'), { statusCode: 409 });
-
-  const membership = await prisma.membership.create({
-    data: {
-      memberId,
-      membershipType: membershipType || 'Standard',
-      status: 'ACTIVE',
-      duesAmount,
-      paymentStatus: 'PAID',
-      startDate: new Date(startDate),
-      expiryDate: new Date(expiryDate),
-      benefits: benefits || [],
-    },
-  });
-
-  // Record transaction
-  await prisma.transaction.create({
-    data: {
-      type: 'MEMBERSHIP_DUES',
-      direction: 'INCOME',
-      amount: duesAmount,
-      description: `Membership dues - ${membershipType || 'Standard'} for member ${memberId}`,
-      createdById,
-      membershipId: membership.id,
-    },
-  });
-
-  return membership;
-};
-
-/**
- * Get all memberships with filters
- */
-const getAllMemberships = async ({ page = 1, limit = 20, status, memberId }) => {
-  const skip = (page - 1) * limit;
-  const where = {
-    ...(status && { status }),
-    ...(memberId && { memberId }),
+function serializePlan(plan) {
+  return {
+    id: plan.id,
+    name: plan.name,
+    fee: money(plan.fee),
+    durationMonths: plan.durationMonths,
+    ticketDiscountPercent: money(plan.ticketDiscountPercent),
+    merchDiscountPercent: money(plan.merchDiscountPercent),
+    renewalReminderDays: plan.renewalReminderDays,
+    gracePeriodDays: plan.gracePeriodDays,
+    isActive: plan.isActive,
   };
+}
 
-  const [memberships, total] = await Promise.all([
-    prisma.membership.findMany({
-      where,
-      skip,
-      take: Number(limit),
-      include: { member: { select: { firstName: true, lastName: true, studentId: true } } },
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.membership.count({ where }),
+function serializeMembership(membership) {
+  return {
+    id: membership.id,
+    userId: membership.userId,
+    planId: membership.planId,
+    planName: membership.plan?.name,
+    startDate: membership.startDate,
+    endDate: membership.endDate,
+    duesAmount: money(membership.duesAmount),
+    paymentStatus: membership.paymentStatus,
+    status: membership.status,
+    benefits: membership.plan
+      ? {
+          ticketDiscountPercent: money(membership.plan.ticketDiscountPercent),
+          merchDiscountPercent: money(membership.plan.merchDiscountPercent),
+        }
+      : null,
+  };
+}
+
+async function listPlans(user, activeOnly) {
+  const where = !user || user.role !== 'ADMIN' || activeOnly ? { isActive: true } : {};
+  const plans = await prisma.membershipPlan.findMany({ where, orderBy: { fee: 'asc' } });
+  return plans.map(serializePlan);
+}
+
+async function createPlan(input) {
+  const plan = await prisma.membershipPlan.create({ data: input });
+  return serializePlan(plan);
+}
+
+async function updatePlan(planId, input) {
+  const existing = await prisma.membershipPlan.findUnique({ where: { id: planId } });
+  if (!existing) throw new ApiError(404, 'Membership plan not found', 'NOT_FOUND');
+  const plan = await prisma.membershipPlan.update({ where: { id: planId }, data: input });
+  return serializePlan(plan);
+}
+
+async function getMembership(memberId) {
+  const membership = await prisma.membership.findFirst({
+    where: { userId: memberId },
+    include: { plan: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  return membership ? serializeMembership(membership) : null;
+}
+
+async function stats() {
+  const now = new Date();
+  const plans = await prisma.membershipPlan.findMany();
+  const activeRows = await prisma.membership.findMany({
+    where: { status: 'ACTIVE' },
+    include: { plan: true },
+  });
+  const expiringSoon = activeRows.filter((row) => {
+    if (!row.endDate) return false;
+    const windowMs = row.plan.renewalReminderDays * 24 * 60 * 60 * 1000;
+    return row.endDate.getTime() - now.getTime() <= windowMs && row.endDate >= now;
+  }).length;
+  const [expired, unpaid] = await Promise.all([
+    prisma.membership.count({ where: { status: 'EXPIRED' } }),
+    prisma.membership.count({ where: { paymentStatus: { in: ['PENDING', 'FAILED'] }, status: { not: 'ACTIVE' } } }),
   ]);
+  return {
+    active: activeRows.length,
+    expiringSoon,
+    expired,
+    unpaid,
+    planCount: plans.length,
+  };
+}
 
-  return { memberships, total, page: Number(page), totalPages: Math.ceil(total / limit) };
-};
-
-/**
- * Renew a membership
- */
-const renewMembership = async (membershipId, { newExpiryDate, duesAmount }, createdById) => {
-  const membership = await prisma.membership.findUnique({ where: { id: membershipId } });
-  if (!membership) throw Object.assign(new Error('Membership not found'), { statusCode: 404 });
-
-  const updated = await prisma.membership.update({
+async function suspend(membershipId) {
+  const existing = await prisma.membership.findUnique({ where: { id: membershipId }, include: { plan: true } });
+  if (!existing) throw new ApiError(404, 'Membership not found', 'NOT_FOUND');
+  const membership = await prisma.membership.update({
     where: { id: membershipId },
-    data: {
-      status: 'ACTIVE',
-      paymentStatus: 'PAID',
-      expiryDate: new Date(newExpiryDate),
-      duesAmount,
-      renewalReminderSent: false,
-    },
+    data: { status: 'SUSPENDED' },
+    include: { plan: true },
   });
+  return serializeMembership(membership);
+}
 
-  await prisma.transaction.create({
-    data: {
-      type: 'MEMBERSHIP_DUES',
-      direction: 'INCOME',
-      amount: duesAmount,
-      description: `Membership renewal for member ${membership.memberId}`,
-      createdById,
-    },
-  });
-
-  return updated;
+module.exports = {
+  serializePlan,
+  serializeMembership,
+  listPlans,
+  createPlan,
+  updatePlan,
+  getMembership,
+  stats,
+  suspend,
 };
-
-/**
- * Update membership status (suspend, expire)
- */
-const updateStatus = async (membershipId, status) => {
-  return prisma.membership.update({ where: { id: membershipId }, data: { status } });
-};
-
-module.exports = { createMembership, getAllMemberships, renewMembership, updateStatus };

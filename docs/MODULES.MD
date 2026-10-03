@@ -1,214 +1,194 @@
 # Document 5 — Modules & Features
 
-## 1. Authentication & Authorization
+Features below are core scope unless marked later. Each feature reads or writes PostgreSQL through the API. Screens render those responses.
 
-Features:
+## 1. Authentication and Authorization
 
 ```text
-Registration
-Login
-JWT authentication
-Password management
-Role-based access
-Logout
-Session handling
+Registration                          → users row, role MEMBER
+Login                                 → JWT
+Current user                          → GET /auth/me
+Password change
+Logout                                → client drops the JWT
+Role checks                           → users.role
+Volunteer checks                      → users.is_volunteer
 ```
+
+Two-factor authentication is later scope.
 
 ---
 
 # 2. Membership Management
 
-Features:
-
 ```text
-New member registration
-Member directory
-Membership activation
-Membership renewal
-Membership expiry tracking
-Payment status
-Member benefits
-Membership search
-Member history
+Account registration
+Membership plans (fee, duration, discounts, reminder window)
+Pay dues                              → Razorpay test payment + membership ACTIVE
+Renew                                 → new membership period after payment
+Expiry                                → status derived from end_date and job
+Payment status                        → payments row
+Benefits                              → plan discount percents applied at checkout
+Member directory and search           → admin list API
+Membership history                    → many memberships per user
+Suspend / deactivate                  → admin status update
+Door lookup                           → member search returns current membership status
 ```
 
-The challenge specifically calls for tracking who has paid dues, membership benefits, expiration, renewal, and event verification.
+Renewal reminders are notification rows created by the scheduler from `end_date` and `renewal_reminder_days`.
 
 ---
 
 # 3. Event Management
 
-Features:
-
 ```text
-Create event
-Edit event
-Publish event
-Cancel event
-Event capacity
-Member pricing
-Non-member pricing
-Event registration
-Event analytics
+Create, edit, publish, cancel
+Capacity
+Member price and non-member price
+Remaining seats                       → capacity minus PAID, USED, and unexpired PENDING
+Event analytics                       → sold, checked in, revenue from tickets and transactions
 ```
 
 ---
 
 # 4. Ticketing
 
-Features:
-
 ```text
-Online ticket purchase
-Digital ticket generation
-Unique ticket ID
-QR code
-Capacity tracking
-Ticket validation
-Check-in
-Attendance tracking
-Revenue calculation
+Purchase                              → PENDING hold + Razorpay order
+Digital ticket                        → qr_token after status PAID
+Unique ticket id
+Capacity hold and release
+Validate and check in                 → status USED + attendance row
+Attendance list
+Revenue                               → sum of ticket transactions for the event
 ```
 
-The challenge explicitly describes online ticket sales, capacity limits, digital verification at the entrance, attendance tracking, and event revenue.
+Check-in rejects tokens that are missing, for another event, `PENDING`, `CANCELLED`, `EXPIRED`, or already `USED`.
 
 ---
 
 # 5. Announcements
 
-Features:
-
 ```text
-Create announcement
-Edit announcement
-Publish announcement
-Announcement history
-Target audience
-Member notifications
+Create, edit, publish, archive
+History with published_at
+Audience PUBLIC or MEMBERS
+In-app notifications on publish
 ```
-
-This centralizes communications currently scattered across multiple WhatsApp groups.
 
 ---
 
 # 6. Merchandise
 
-Features:
-
 ```text
-Product catalogue
-Product images
-Sizes
-Pricing
-Stock tracking
-Low-stock alerts
-Online ordering
-Order history
-Order status
-Inventory adjustment
+Catalogue with images from Storage
+Variants (size, stock, low-stock threshold)
+Price on the product, discount from the active plan
+Online order after payment verification
+Order history and status workflow
+Inventory decrement on PAID
+Low-stock list                        → variants where stock_quantity <= threshold
+Admin stock adjustment                → variant quantity update
 ```
 
 ---
 
 # 7. Volunteer Management
 
-Features:
-
 ```text
 Create initiative
 Create tasks
-Assign volunteers
-Task deadlines
-Task priority
-Progress tracking
-Volunteer dashboard
-Initiative completion status
+Assign volunteers (is_volunteer members)
+Due date and priority
+Progress status
+Volunteer list of own tasks
+Initiative completion                 → aggregate of task statuses
+Fundraiser income                     → treasurer ledger entry linked to the initiative
 ```
 
 ---
 
 # 8. Finance
 
-Features:
-
 ```text
-Income tracking
-Expense tracking
-Transaction ledger
-Reimbursements
-Receipt storage
-Financial dashboard
-Balance calculation
-Revenue source breakdown
-Expense category breakdown
+Income rows from verified payments and fundraiser income entries
+Expense rows from recorded expenses and paid reimbursements
+Transaction list
+Receipt file on the expense
+Approve, reject, reimburse
+Dashboard sums from the ledger
+Balance = income − expenses
+Revenue by source
+Expenses by category
+Pending reimbursements listed separately
 ```
 
-The financial module directly addresses the requirement to consolidate dues, ticket sales, merchandise sales, expenses, and volunteer reimbursements.
+Sources: `MEMBERSHIP`, `EVENT_TICKET`, `MERCHANDISE`, `FUNDRAISER`. Outflow categories include event costs, supplies, and `REIMBURSEMENT`.
 
 ---
 
 # 9. Notifications
 
-Features:
+In-app rows:
 
 ```text
 Membership renewal reminder
 Event reminder
 Ticket confirmation
-Order confirmation
-Order status update
-Announcement notification
-Task assignment
+Order confirmation and status update
+Announcement published
+Task assigned
 Expense status update
 ```
+
+The notification list and unread count come from `GET /api/v1/notifications`. Email sending is later scope.
 
 ---
 
 # 10. Search
 
-Global/member-facing search can cover:
+`GET /api/v1/search` queries:
 
 ```text
 Events
 Products
 Announcements
-Members
-Orders
-Tickets
 ```
 
-Admin search should be especially fast for finding members and ticket information during events.
+Admin also receives members. Admin and treasurer also receive orders and tickets when the query matches. Results are database matches for the caller’s role.
 
 ---
 
-# 11. Dashboard & Analytics
+# 11. Dashboards
 
-Member dashboard:
+All three dashboards are single aggregate endpoints. The UI maps fields onto KPI cards and lists.
+
+Member:
 
 ```text
-Membership status
+Membership status, plan name, expiry
 Upcoming events
 My tickets
 Recent announcements
 Recent orders
 My tasks
+Unread notifications
 ```
 
-Admin dashboard:
+Admin:
 
 ```text
 Total members
 Active memberships
 Upcoming events
 Tickets sold
-Orders
-Inventory alerts
-Pending tasks
+Open orders
+Low-stock count
+Open tasks
 Pending expenses
-Revenue
+Revenue (ledger income)
 ```
 
-Treasurer dashboard:
+Treasurer:
 
 ```text
 Total income
@@ -221,3 +201,16 @@ Recent transactions
 ```
 
 ---
+
+# 12. Settings and Uploads
+
+```text
+Organization profile
+Membership plans
+Store and event defaults
+Per-user notification preferences
+Payment provider status (test mode configured or not)
+Profile image, product image, logo, receipt uploads
+```
+
+Role changes are admin. Export files and editable permission grids are later scope.

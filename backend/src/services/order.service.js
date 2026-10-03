@@ -1,148 +1,97 @@
-const prisma = require('../config/db');
-const { hasActiveMembership } = require('./member.service');
+const prisma = require('../lib/prisma');
+const { ApiError } = require('../lib/errors');
+const { money } = require('../lib/money');
+const { pageParams, sortOrder } = require('../lib/paging');
+const { notify } = require('./notify');
 
-/**
- * Place an order
- */
-const placeOrder = async ({ memberId, items, notes }, createdById) => {
-  if (!items || items.length === 0) {
-    throw Object.assign(new Error('Order must contain at least one item'), { statusCode: 400 });
-  }
-
-  const isActiveMember = await hasActiveMembership(memberId);
-
-  // Validate all items and compute total
-  let totalAmount = 0;
-  const resolvedItems = [];
-
-  for (const item of items) {
-    const product = await prisma.product.findUnique({
-      where: { id: item.productId },
-      include: { variants: true },
-    });
-
-    if (!product || !product.isActive) {
-      throw Object.assign(new Error(`Product not found or unavailable: ${item.productId}`), { statusCode: 404 });
-    }
-
-    let variant = null;
-    if (item.variantId) {
-      variant = product.variants.find((v) => v.id === item.variantId);
-      if (!variant) throw Object.assign(new Error(`Variant not found: ${item.variantId}`), { statusCode: 404 });
-      if (variant.quantity < item.quantity) {
-        throw Object.assign(new Error(`Insufficient stock for ${product.name} - ${variant.size}`), { statusCode: 400 });
-      }
-    }
-
-    const unitPrice = isActiveMember && product.memberPrice ? product.memberPrice : product.price;
-    const subtotal = unitPrice * item.quantity;
-    totalAmount += subtotal;
-
-    resolvedItems.push({ product, variant, quantity: item.quantity, unitPrice, subtotal, variantId: item.variantId });
-  }
-
-  // Create order with items in a transaction
-  const operations = [];
-
-  // Decrement stock for each variant
-  for (const item of resolvedItems) {
-    if (item.variant) {
-      operations.push(
-        prisma.productVariant.update({
-          where: { id: item.variantId },
-          data: { quantity: { decrement: item.quantity } },
-        })
-      );
-    }
-  }
-
-  const order = await prisma.order.create({
-    data: {
-      memberId,
-      totalAmount,
-      paymentStatus: 'PAID',
-      status: 'CONFIRMED',
-      notes,
-      items: {
-        createMany: {
-          data: resolvedItems.map((i) => ({
-            productId: i.product.id,
-            variantId: i.variantId || null,
-            quantity: i.quantity,
-            unitPrice: i.unitPrice,
-            subtotal: i.subtotal,
-          })),
-        },
-      },
-    },
-    include: { items: { include: { product: true, variant: true } } },
-  });
-
-  // Run stock decrements
-  if (operations.length > 0) await prisma.$transaction(operations);
-
-  // Record financial transaction
-  await prisma.transaction.create({
-    data: {
-      type: 'MERCHANDISE_SALE',
-      direction: 'INCOME',
-      amount: totalAmount,
-      description: `Merchandise order #${order.id}`,
-      createdById,
-      orderId: order.id,
-    },
-  });
-
-  return order;
+const NEXT_STATUS = {
+  PAID: ['PROCESSING'],
+  PROCESSING: ['READY'],
+  READY: ['COMPLETED'],
 };
 
-/**
- * Get all orders
- */
-const getAllOrders = async ({ page = 1, limit = 20, status, memberId }) => {
-  const skip = (page - 1) * limit;
-  const where = {
-    ...(status && { status }),
-    ...(memberId && { memberId }),
+function serialize(order) {
+  return {
+    id: order.id,
+    userId: order.userId,
+    totalAmount: money(order.totalAmount),
+    discountAmount: money(order.discountAmount),
+    paymentStatus: order.paymentStatus,
+    orderStatus: order.orderStatus,
+    fulfillment: order.fulfillment,
+    createdAt: order.createdAt,
+    items: (order.items || []).map((item) => ({
+      id: item.id,
+      variantId: item.productVariantId,
+      size: item.productVariant?.size,
+      productName: item.productVariant?.product?.name,
+      quantity: item.quantity,
+      unitPrice: money(item.unitPrice),
+      subtotal: money(item.subtotal),
+    })),
   };
+}
 
-  const [orders, total] = await Promise.all([
+const include = { items: { include: { productVariant: { include: { product: true } } } } };
+
+async function myOrders(userId) {
+  const rows = await prisma.order.findMany({
+    where: { userId },
+    include,
+    orderBy: { createdAt: 'desc' },
+  });
+  return rows.map(serialize);
+}
+
+async function listOrders(query) {
+  const { page, limit, skip } = pageParams(query);
+  const where = {};
+  if (query.status) where.orderStatus = query.status;
+  const [total, rows] = await prisma.$transaction([
+    prisma.order.count({ where }),
     prisma.order.findMany({
       where,
       skip,
-      take: Number(limit),
-      include: {
-        member: { select: { firstName: true, lastName: true, studentId: true } },
-        items: { include: { product: { select: { name: true } }, variant: { select: { size: true } } } },
-      },
-      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include,
+      orderBy: sortOrder(query, ['createdAt', 'totalAmount'], { createdAt: 'desc' }),
     }),
-    prisma.order.count({ where }),
   ]);
+  return { data: rows.map(serialize), meta: { page, limit, total } };
+}
 
-  return { orders, total, page: Number(page), totalPages: Math.ceil(total / limit) };
-};
+async function getOrder(orderId, user) {
+  const order = await prisma.order.findUnique({ where: { id: orderId }, include });
+  if (!order) throw new ApiError(404, 'Order not found', 'NOT_FOUND');
+  const allowed = order.userId === user.id || user.role === 'ADMIN' || user.role === 'TREASURER';
+  if (!allowed) throw new ApiError(403, 'Forbidden', 'FORBIDDEN');
+  return serialize(order);
+}
 
-/**
- * Get order by ID
- */
-const getOrderById = async (id) => {
-  const order = await prisma.order.findUnique({
-    where: { id },
-    include: {
-      member: { select: { firstName: true, lastName: true, studentId: true } },
-      items: { include: { product: true, variant: true } },
-    },
+async function updateStatus(orderId, status) {
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) throw new ApiError(404, 'Order not found', 'NOT_FOUND');
+  if (order.paymentStatus !== 'PAID') {
+    throw new ApiError(409, 'Only paid orders can change fulfillment status', 'CONFLICT');
+  }
+  const allowed = NEXT_STATUS[order.orderStatus] || [];
+  if (!allowed.includes(status)) {
+    throw new ApiError(409, 'That status change is not allowed', 'CONFLICT');
+  }
+  const updated = await prisma.order.update({
+    where: { id: orderId },
+    data: { orderStatus: status },
+    include,
   });
-  if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
-  return order;
-};
+  await notify(prisma, {
+    userId: order.userId,
+    title: 'Order update',
+    message: `Your order is now ${status}.`,
+    type: 'ORDER',
+    referenceType: 'ORDER',
+    referenceId: order.id,
+  });
+  return serialize(updated);
+}
 
-/**
- * Update order status
- */
-const updateOrderStatus = async (id, status) => {
-  return prisma.order.update({ where: { id }, data: { status } });
-};
-
-module.exports = { placeOrder, getAllOrders, getOrderById, updateOrderStatus };
+module.exports = { myOrders, listOrders, getOrder, updateStatus };

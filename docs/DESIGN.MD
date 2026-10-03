@@ -2,9 +2,7 @@
 
 ## 1. Design Philosophy
 
-CampusHub should feel like a modern SaaS dashboard rather than an academic administration portal.
-
-The interface should be:
+CampusHub is a responsive SaaS-style application for one student organization. Navigation is short, forms are consistent, and every number on screen is a field from the API.
 
 ```text
 Clean
@@ -13,12 +11,33 @@ Professional
 Fast to navigate
 Mobile responsive
 Consistent
-Data-focused
+Data from the API
 ```
 
-The system should reduce the number of actions needed for common tasks.
+## 2. Dynamic Data on Every Screen
 
-## 2. Color Theme
+Each page follows the same states:
+
+```text
+Loading     skeleton while the request is in flight
+Success     render the response
+Empty       the API returned an empty list or null detail
+Error       message from the API plus a retry action
+```
+
+Organization name, logo, currency, and timezone come from `GET /api/v1/settings/organization`. Fees come from membership plans. Prices come from the event or variant payload. Dashboard figures come from the dashboard endpoints. The interface does not embed sample member counts, revenue, events, or products.
+
+Empty copy describes the next action and links to a real route. Example structure for an empty order list:
+
+```text
+Heading: No orders yet
+Body: Merchandise orders will appear here after a purchase.
+Action: Browse merchandise → /store
+```
+
+The heading is interface copy. The order rows, when they exist, are `data` from `GET /api/v1/orders/my`.
+
+## 3. Color Theme
 
 Primary:
 
@@ -45,9 +64,9 @@ Warning      #F59E0B
 Error        #DC2626
 ```
 
-## 3. Typography
+Tailwind theme tokens map to these values. Status badges use semantic colors for API enums (`ACTIVE`, `PAID`, `PENDING`, `USED`, `REJECTED`).
 
-Recommended hierarchy:
+## 4. Typography
 
 ```text
 Page Heading       28–32px
@@ -57,32 +76,27 @@ Body               14–16px
 Supporting Text    12–14px
 ```
 
-## 4. Layout
+## 5. Layout
 
-Desktop:
+Desktop authenticated app:
 
 ```text
 ┌──────────────────────────────────────────────────────┐
-│ Logo                    Search     Bell   Profile   │
+│ Logo (org settings)     Search    Bell    Profile   │
 ├─────────────┬────────────────────────────────────────┤
-│             │                                        │
-│ Sidebar     │             Main Content               │
-│             │                                        │
-│ Dashboard   │  Page heading                          │
-│ Members     │  KPI cards                             │
-│ Events      │  Tables / Cards / Charts               │
-│ Tickets     │                                        │
-│ Store       │                                        │
-│ Finance     │                                        │
-│ Settings    │                                        │
+│ Sidebar     │  Page heading                          │
+│ from role   │  KPI cards from dashboard API          │
+│             │  Tables / cards from list APIs         │
 └─────────────┴────────────────────────────────────────┘
 ```
 
-The sidebar remains consistent while the content area changes according to the selected module.
+The logo and organization name are `organization_settings`. The badge on the bell is `GET /api/v1/notifications` unread count. Sidebar items depend on `user.role` and `user.isVolunteer` from `GET /api/v1/auth/me`.
 
-## 5. Component System
+Member mobile uses bottom navigation: Home, Events, Tickets, Store, Account. Admin and treasurer on small screens use a collapsible sidebar with the same links as desktop.
 
-Reusable components should include:
+Public pages have a top bar: organization name, Events, Store, Login, Register.
+
+## 6. Component System
 
 ```text
 Button
@@ -103,113 +117,82 @@ Search Bar
 Chart
 Empty State
 Loading Skeleton
+QR Code
 ```
 
-## 6. Dashboard Cards
+Tables support search, filtering, sorting, and pagination by passing query params the list endpoint already accepts. Row actions call the matching mutation. Bulk selection is omitted in the core build.
 
-All dashboards should use consistent KPI cards.
+Charts on the finance dashboard plot `revenueBySource` and `expensesByCategory` from `GET /api/v1/finance/summary`. With no transactions, the chart area shows the empty state.
 
-Example:
+## 7. KPI Cards
+
+Cards share one layout: label, value, optional supporting line. The value is a number or formatted money field from the dashboard payload. The supporting line uses a comparison field when the API sends one. When the API sends only the current total, the card shows that total.
 
 ```text
 ┌────────────────────────┐
-│ Active Members         │
-│ 1,102                  │
-│ ↑ 8.2% this semester   │
+│ {label}                │
+│ {value}                │
+│ {supportingText}       │
 └────────────────────────┘
 ```
 
-## 7. Tables
+Member dashboard (`GET /api/v1/dashboard/member`): membership status, upcoming events count, ticket count, open task count.
 
-Admin-heavy pages should use tables.
+Admin dashboard (`GET /api/v1/dashboard/admin`): member count, active memberships, upcoming events, tickets sold, open orders, low-stock count, open tasks, pending expenses, revenue.
 
-Example:
-
-```text
-Member | Membership | Status | Expiry | Action
-```
-
-Tables should support:
-
-```text
-Search
-Filtering
-Sorting
-Pagination
-Row actions
-Bulk selection
-```
+Treasurer dashboard (`GET /api/v1/dashboard/finance` or `GET /api/v1/finance/summary`): income, expenses, balance, pending reimbursements, recent transactions.
 
 ## 8. Forms
-
-Every form should follow the same visual structure:
 
 ```text
 Section
    ↓
-Input Fields
+Fields
    ↓
-Validation
+Client validation
    ↓
-Primary Action
+Submit → API
    ↓
-Cancel / Secondary Action
+Field errors from 400 responses or toast on success
 ```
 
-Validation should happen both on the frontend and backend.
+Server validation is authoritative. Money amounts displayed in a form are the amounts the create-payment response returns, so the Razorpay checkout amount matches the row.
 
-## 9. Loading and Error States
+## 9. Key Screens and Their APIs
 
-Every API-driven screen should support:
+| Screen | Data source |
+| --- | --- |
+| Public home | `GET /api/v1/settings/organization`, `GET /api/v1/events?status=PUBLISHED`, `GET /api/v1/announcements?audience=PUBLIC`, `GET /api/v1/membership-plans?active=true` |
+| Event details | `GET /api/v1/events/:eventId` including prices, capacity, remaining seats |
+| Member dashboard | `GET /api/v1/dashboard/member` |
+| Ticket / QR | `GET /api/v1/tickets/:ticketId` (`qrToken` only when status is `PAID` or `USED`) |
+| Admin dashboard | `GET /api/v1/dashboard/admin` |
+| Event management | `GET/POST/PATCH /api/v1/events` |
+| QR check-in | `POST /api/v1/tickets/check-in` with the scanned token |
+| Merchandise store | `GET /api/v1/products` with variants and stock |
+| Inventory | `GET /api/v1/inventory/low-stock` and product variant updates |
+| Volunteer task board | `GET /api/v1/tasks/my` or `GET /api/v1/initiatives/:id` |
+| Finance dashboard | `GET /api/v1/finance/summary` and `GET /api/v1/finance/transactions` |
+| Checkout | `POST /api/v1/payments/orders` then Razorpay test checkout then `POST /api/v1/payments/verify` |
+
+Search in the header calls `GET /api/v1/search?q=` and renders grouped results (events, products, announcements; members and orders only if the role allows).
+
+## 10. Demo Path
+
+A presentation walks live API data:
 
 ```text
-Loading
-Success
-Empty
-Error
-Retry
+1. Public home
+2. Register and pay dues
+3. Member dashboard
+4. Event details and ticket purchase
+5. QR ticket
+6. Admin event list and QR check-in
+7. Store purchase
+8. Inventory counts after the order
+9. Initiative, task assignment, task update
+10. Expense with receipt, treasurer decision, ledger update
+11. Finance dashboard
 ```
 
-For example, an empty order page should not just be blank.
-
-```text
-No Orders Yet
-
-Your merchandise orders will appear here.
-
-[Browse Merchandise]
-```
-
-## 10. Mobile Design
-
-The member-facing portion should be fully responsive because students may use their phones for tickets, merchandise, announcements, and membership actions.
-
-The desktop admin application can use a sidebar while mobile can switch to:
-
-```text
-Bottom Navigation
-or
-Collapsible Sidebar
-```
-
-## 11. Key Demo Screens
-
-For the hackathon presentation, the most important screens should be:
-
-```text
-1. Public Home
-2. Member Dashboard
-3. Event Details
-4. Ticket / QR
-5. Admin Dashboard
-6. Event Management
-7. QR Check-in
-8. Merchandise Store
-9. Inventory Dashboard
-10. Volunteer Task Board
-11. Finance Dashboard
-```
-
-These visually demonstrate the complete organization lifecycle.
-
----
+Each step is a real request. Refreshing the dashboards shows the new rows.

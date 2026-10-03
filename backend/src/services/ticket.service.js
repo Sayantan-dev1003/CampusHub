@@ -1,144 +1,102 @@
-const crypto = require('crypto');
-const prisma = require('../config/db');
-const { hasActiveMembership } = require('./member.service');
+const prisma = require('../lib/prisma');
+const { ApiError } = require('../lib/errors');
+const { money } = require('../lib/money');
 
-/**
- * Purchase a ticket for an event
- */
-const purchaseTicket = async ({ eventId, memberId, buyerName, buyerEmail, ticketType }, createdById) => {
-  const event = await prisma.event.findUnique({ where: { id: eventId } });
-  if (!event) throw Object.assign(new Error('Event not found'), { statusCode: 404 });
-  if (event.status !== 'PUBLISHED') throw Object.assign(new Error('Event is not open for ticket sales'), { statusCode: 400 });
-  if (event.remainingSeats <= 0) throw Object.assign(new Error('Event is sold out'), { statusCode: 400 });
-
-  // Determine price based on membership
-  let price = event.nonMemberPrice;
-  let resolvedType = ticketType || 'NON_MEMBER';
-
-  if (memberId) {
-    const isActive = await hasActiveMembership(memberId);
-    if (isActive) {
-      price = event.memberPrice;
-      resolvedType = 'MEMBER';
-    }
-  }
-
-  // Generate unique QR code
-  const qrCode = crypto.randomBytes(16).toString('hex').toUpperCase();
-
-  // Use a transaction to ensure atomicity
-  const [ticket] = await prisma.$transaction([
-    prisma.ticket.create({
-      data: {
-        eventId,
-        memberId: memberId || null,
-        buyerName,
-        buyerEmail,
-        ticketType: resolvedType,
-        price,
-        qrCode,
-        status: 'BOOKED',
-      },
-    }),
-    prisma.event.update({
-      where: { id: eventId },
-      data: { remainingSeats: { decrement: 1 } },
-    }),
-  ]);
-
-  // Record financial transaction
-  await prisma.transaction.create({
-    data: {
-      type: 'TICKET_SALE',
-      direction: 'INCOME',
-      amount: price,
-      description: `Ticket for event: ${event.title}`,
-      createdById,
-      ticketId: ticket.id,
-    },
-  });
-
-  return ticket;
-};
-
-/**
- * Validate and check-in a ticket by QR code
- */
-const checkInTicket = async (qrCode, checkedInBy) => {
-  const ticket = await prisma.ticket.findUnique({
-    where: { qrCode },
-    include: { event: true },
-  });
-
-  if (!ticket) throw Object.assign(new Error('Invalid QR code'), { statusCode: 404 });
-  if (ticket.status === 'CHECKED_IN') throw Object.assign(new Error('Ticket already used for check-in'), { statusCode: 400 });
-  if (ticket.status === 'CANCELLED') throw Object.assign(new Error('This ticket has been cancelled'), { statusCode: 400 });
-  if (ticket.event.status !== 'PUBLISHED') throw Object.assign(new Error('Event is not active'), { statusCode: 400 });
-
-  return prisma.ticket.update({
-    where: { qrCode },
-    data: { status: 'CHECKED_IN', checkInAt: new Date(), checkedInBy },
-    include: { event: { select: { title: true, venue: true } }, member: { select: { firstName: true, lastName: true } } },
-  });
-};
-
-/**
- * Get all tickets with filters
- */
-const getAllTickets = async ({ page = 1, limit = 20, eventId, status, memberId }) => {
-  const skip = (page - 1) * limit;
-  const where = {
-    ...(eventId && { eventId }),
-    ...(status && { status }),
-    ...(memberId && { memberId }),
+function serializeTicket(ticket, includeQr) {
+  const visible = includeQr && (ticket.status === 'PAID' || ticket.status === 'USED');
+  return {
+    id: ticket.id,
+    eventId: ticket.eventId,
+    eventTitle: ticket.event?.title,
+    startsAt: ticket.event?.startsAt,
+    venue: ticket.event?.venue,
+    userId: ticket.userId,
+    ticketType: ticket.ticketType,
+    price: money(ticket.price),
+    status: ticket.status,
+    checkedInAt: ticket.checkedInAt,
+    qrToken: visible ? ticket.qrToken : undefined,
+    createdAt: ticket.createdAt,
   };
+}
 
-  const [tickets, total] = await Promise.all([
-    prisma.ticket.findMany({
-      where,
-      skip,
-      take: Number(limit),
-      include: {
-        event: { select: { title: true, startDate: true } },
-        member: { select: { firstName: true, lastName: true, studentId: true } },
-      },
-      orderBy: { purchasedAt: 'desc' },
-    }),
-    prisma.ticket.count({ where }),
-  ]);
-
-  return { tickets, total, page: Number(page), totalPages: Math.ceil(total / limit) };
-};
-
-/**
- * Get ticket by ID
- */
-const getTicketById = async (id) => {
-  const ticket = await prisma.ticket.findUnique({
-    where: { id },
-    include: {
-      event: true,
-      member: { select: { firstName: true, lastName: true, studentId: true } },
-    },
+async function myTickets(userId) {
+  const tickets = await prisma.ticket.findMany({
+    where: { userId, status: { in: ['PAID', 'USED', 'PENDING'] } },
+    include: { event: true },
+    orderBy: { createdAt: 'desc' },
   });
-  if (!ticket) throw Object.assign(new Error('Ticket not found'), { statusCode: 404 });
-  return ticket;
-};
+  return tickets.map((ticket) => serializeTicket(ticket, ticket.userId === userId));
+}
 
-/**
- * Cancel a ticket
- */
-const cancelTicket = async (id) => {
-  const ticket = await prisma.ticket.findUnique({ where: { id } });
-  if (!ticket) throw Object.assign(new Error('Ticket not found'), { statusCode: 404 });
-  if (ticket.status === 'CHECKED_IN') throw Object.assign(new Error('Cannot cancel an already checked-in ticket'), { statusCode: 400 });
+async function getTicket(ticketId, user) {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    include: { event: true, attendance: true },
+  });
+  if (!ticket) throw new ApiError(404, 'Ticket not found', 'NOT_FOUND');
+  const allowed = ticket.userId === user.id || user.role === 'ADMIN' || user.role === 'TREASURER';
+  if (!allowed) throw new ApiError(403, 'Forbidden', 'FORBIDDEN');
+  return {
+    ...serializeTicket(ticket, true),
+    attendance: ticket.attendance
+      ? { checkedInAt: ticket.attendance.checkedInAt, checkedInById: ticket.attendance.checkedInById }
+      : null,
+  };
+}
 
-  const [updated] = await prisma.$transaction([
-    prisma.ticket.update({ where: { id }, data: { status: 'CANCELLED' } }),
-    prisma.event.update({ where: { id: ticket.eventId }, data: { remainingSeats: { increment: 1 } } }),
-  ]);
+async function checkIn(staffId, qrToken) {
+  return prisma.runTransaction(async (tx) => {
+    const ticket = await tx.ticket.findUnique({ where: { qrToken }, include: { event: true } });
+    if (!ticket) throw new ApiError(404, 'Ticket not found', 'NOT_FOUND');
+    if (ticket.event.status === 'CANCELLED') {
+      throw new ApiError(409, 'Event is cancelled', 'TICKET_NOT_PAID');
+    }
+    if (ticket.status === 'USED') throw new ApiError(409, 'Ticket already used', 'TICKET_ALREADY_USED');
+    if (ticket.status !== 'PAID') throw new ApiError(409, 'Ticket is not paid', 'TICKET_NOT_PAID');
+    const checkedInAt = new Date();
+    const claimed = await tx.ticket.updateMany({
+      where: { id: ticket.id, status: 'PAID' },
+      data: { status: 'USED', checkedInAt },
+    });
+    if (claimed.count !== 1) throw new ApiError(409, 'Ticket already used', 'TICKET_ALREADY_USED');
+    const updated = await tx.ticket.findUnique({ where: { id: ticket.id } });
+    const attendance = await tx.attendance.create({
+      data: {
+        ticketId: ticket.id,
+        eventId: ticket.eventId,
+        userId: ticket.userId,
+        checkedInAt,
+        checkedInById: staffId,
+      },
+    });
+    return {
+      ticketId: updated.id,
+      eventId: ticket.eventId,
+      status: updated.status,
+      checkedInAt,
+      checkedInById: staffId,
+      attendanceId: attendance.id,
+    };
+  });
+}
 
-  return updated;
-};
+async function attendance(eventId) {
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) throw new ApiError(404, 'Event not found', 'NOT_FOUND');
+  const rows = await prisma.attendance.findMany({
+    where: { eventId },
+    include: { user: true, ticket: true },
+    orderBy: { checkedInAt: 'desc' },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    ticketId: row.ticketId,
+    userId: row.userId,
+    name: row.user.name,
+    checkedInAt: row.checkedInAt,
+    checkedInById: row.checkedInById,
+  }));
+}
 
-module.exports = { purchaseTicket, checkInTicket, getAllTickets, getTicketById, cancelTicket };
+module.exports = { myTickets, getTicket, checkIn, attendance, serializeTicket };

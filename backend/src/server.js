@@ -1,14 +1,20 @@
-require('dotenv').config();
+const { assertBootEnv, env } = require('./config/env');
+
+assertBootEnv();
+
 const app = require('./app');
+const { startScheduler } = require('./jobs/scheduler');
+const { getOrganization } = require('./services/settings.service');
 
-const PORT = process.env.PORT || 5000;
+async function main() {
+  await getOrganization();
+  startScheduler();
+  app.listen(env.port, () => {
+    console.log(`CampusHub API listening on port ${env.port}`);
+  });
+}
 
-app.listen(PORT, () => {
-  console.log(`
-  ╔════════════════════════════════════════╗
-  ║     🎓 CampusHub Backend Server        ║
-  ║     Running on port ${PORT}              ║
-  ║     Environment: ${process.env.NODE_ENV}   ║
-  ╚════════════════════════════════════════╝
-  `);
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
 });

@@ -1,105 +1,142 @@
-const prisma = require('../config/db');
+const prisma = require('../lib/prisma');
+const { ApiError } = require('../lib/errors');
+const { pageParams, sortOrder } = require('../lib/paging');
+const { publicUser } = require('../lib/authToken');
+const { membershipSummary } = require('./auth.service');
 
-/**
- * Get all members (admin only)
- */
-const getAllMembers = async ({ page = 1, limit = 20, search, status }) => {
-  const skip = (page - 1) * limit;
-
-  const where = {
-    ...(search && {
-      OR: [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { studentId: { contains: search, mode: 'insensitive' } },
-        { user: { email: { contains: search, mode: 'insensitive' } } },
-      ],
-    }),
-    ...(status && {
-      memberships: { some: { status } },
-    }),
-  };
-
-  const [members, total] = await Promise.all([
-    prisma.member.findMany({
-      where,
-      skip,
-      take: Number(limit),
-      include: {
-        user: { select: { email: true, role: true, isActive: true } },
-        memberships: { orderBy: { createdAt: 'desc' }, take: 1 },
-      },
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.member.count({ where }),
-  ]);
-
-  return { members, total, page: Number(page), limit: Number(limit), totalPages: Math.ceil(total / limit) };
+const memberInclude = {
+  memberships: { include: { plan: true }, orderBy: { createdAt: 'desc' } },
+  tickets: { take: 5, orderBy: { createdAt: 'desc' }, include: { event: true } },
+  orders: { take: 5, orderBy: { createdAt: 'desc' } },
 };
 
-/**
- * Get a member by ID
- */
-const getMemberById = async (id) => {
-  const member = await prisma.member.findUnique({
-    where: { id },
-    include: {
-      user: { select: { email: true, role: true, isActive: true } },
-      memberships: { orderBy: { createdAt: 'desc' } },
-      tickets: { include: { event: true }, orderBy: { purchasedAt: 'desc' }, take: 5 },
-      orders: { orderBy: { createdAt: 'desc' }, take: 5 },
-    },
-  });
+function activeOf(user) {
+  return user.memberships.find(
+    (membership) => membership.status === 'ACTIVE' && membership.endDate && membership.endDate >= new Date()
+  );
+}
 
-  if (!member) throw Object.assign(new Error('Member not found'), { statusCode: 404 });
-  return member;
-};
-
-/**
- * Update member profile
- */
-const updateMember = async (id, data, requestingUser) => {
-  const member = await prisma.member.findUnique({ where: { id }, include: { user: true } });
-  if (!member) throw Object.assign(new Error('Member not found'), { statusCode: 404 });
-
-  // Only the member themselves or an admin can update
-  if (requestingUser.role === 'MEMBER' && member.userId !== requestingUser.id) {
-    throw Object.assign(new Error('Forbidden'), { statusCode: 403 });
+async function listMembers(query) {
+  const { page, limit, skip } = pageParams(query);
+  const where = {};
+  if (query.status) where.status = query.status;
+  if (query.search) {
+    where.OR = [
+      { name: { contains: query.search, mode: 'insensitive' } },
+      { email: { contains: query.search, mode: 'insensitive' } },
+      { studentId: { contains: query.search, mode: 'insensitive' } },
+    ];
+  }
+  if (query.membership === 'ACTIVE') {
+    where.memberships = { some: { status: 'ACTIVE', endDate: { gte: new Date() } } };
+  } else if (query.membership === 'EXPIRED') {
+    where.memberships = { some: { status: 'EXPIRED' } };
+    where.NOT = { memberships: { some: { status: 'ACTIVE', endDate: { gte: new Date() } } } };
+  } else if (query.membership === 'NONE') {
+    where.memberships = { none: {} };
   }
 
-  const { firstName, lastName, phone, profilePhoto } = data;
-  return prisma.member.update({
-    where: { id },
-    data: { firstName, lastName, phone, profilePhoto },
-    include: { user: { select: { email: true, role: true } } },
-  });
-};
+  const [total, rows] = await prisma.$transaction([
+    prisma.user.count({ where }),
+    prisma.user.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: sortOrder(query, ['name', 'email', 'createdAt'], { createdAt: 'desc' }),
+      include: { memberships: { include: { plan: true }, orderBy: { createdAt: 'desc' }, take: 1 } },
+    }),
+  ]);
 
-/**
- * Check if member has an active membership
- */
-const hasActiveMembership = async (memberId) => {
-  const membership = await prisma.membership.findFirst({
-    where: { memberId, status: 'ACTIVE', expiryDate: { gt: new Date() } },
-  });
-  return !!membership;
-};
+  return {
+    data: rows.map((user) => ({
+      ...publicUser(user, membershipSummary(activeOf(user) || user.memberships[0])),
+    })),
+    meta: { page, limit, total },
+  };
+}
 
-/**
- * Get members whose memberships expire within N days (for reminders)
- */
-const getExpiringMemberships = async (daysAhead = 30) => {
-  const futureDate = new Date();
-  futureDate.setDate(futureDate.getDate() + daysAhead);
+async function getMember(memberId) {
+  const user = await prisma.user.findUnique({ where: { id: memberId }, include: memberInclude });
+  if (!user) throw new ApiError(404, 'Member not found', 'NOT_FOUND');
+  return {
+    ...publicUser(user, membershipSummary(activeOf(user))),
+    membershipHistory: user.memberships.map((membership) => ({
+      id: membership.id,
+      status: membership.status,
+      paymentStatus: membership.paymentStatus,
+      startDate: membership.startDate,
+      endDate: membership.endDate,
+      planName: membership.plan.name,
+    })),
+    recentTickets: user.tickets.map((ticket) => ({
+      id: ticket.id,
+      status: ticket.status,
+      eventTitle: ticket.event.title,
+    })),
+    recentOrders: user.orders.map((order) => ({
+      id: order.id,
+      orderStatus: order.orderStatus,
+      paymentStatus: order.paymentStatus,
+    })),
+  };
+}
 
-  return prisma.membership.findMany({
-    where: {
-      status: 'ACTIVE',
-      expiryDate: { lte: futureDate, gt: new Date() },
-      renewalReminderSent: false,
-    },
-    include: { member: { include: { user: { select: { email: true } } } } },
-  });
-};
+async function updateMe(userId, input) {
+  if (input.email) {
+    const existing = await prisma.user.findUnique({ where: { email: input.email.toLowerCase() } });
+    if (existing && existing.id !== userId) {
+      throw new ApiError(409, 'An account with that email already exists', 'CONFLICT');
+    }
+  }
+  const data = {};
+  if (input.name !== undefined) data.name = input.name;
+  if (input.email !== undefined) data.email = input.email.toLowerCase();
+  if (input.phone !== undefined) data.phone = input.phone;
+  if (input.studentId !== undefined) data.studentId = input.studentId;
+  if (input.notificationPreferences !== undefined) {
+    const current = await prisma.user.findUnique({ where: { id: userId } });
+    data.notificationPreferences = {
+      ...(current.notificationPreferences || {}),
+      ...input.notificationPreferences,
+    };
+  }
+  const user = await prisma.user.update({ where: { id: userId }, data });
+  return publicUser(user);
+}
 
-module.exports = { getAllMembers, getMemberById, updateMember, hasActiveMembership, getExpiringMemberships };
+async function updateMember(memberId, input) {
+  const existing = await prisma.user.findUnique({ where: { id: memberId } });
+  if (!existing) throw new ApiError(404, 'Member not found', 'NOT_FOUND');
+  const data = {};
+  if (input.name !== undefined) data.name = input.name;
+  if (input.phone !== undefined) data.phone = input.phone;
+  if (input.studentId !== undefined) data.studentId = input.studentId;
+  if (input.profileImage !== undefined) data.profileImage = input.profileImage;
+  const user = await prisma.user.update({ where: { id: memberId }, data });
+  return publicUser(user);
+}
+
+async function updateStatus(memberId, status) {
+  const existing = await prisma.user.findUnique({ where: { id: memberId } });
+  if (!existing) throw new ApiError(404, 'Member not found', 'NOT_FOUND');
+  const user = await prisma.user.update({ where: { id: memberId }, data: { status } });
+  return publicUser(user);
+}
+
+async function updateRole(actorId, userId, input) {
+  if (actorId === userId) {
+    throw new ApiError(403, 'You cannot change your own role', 'FORBIDDEN');
+  }
+  const existing = await prisma.user.findUnique({ where: { id: userId } });
+  if (!existing) throw new ApiError(404, 'User not found', 'NOT_FOUND');
+  const data = {};
+  if (input.role === undefined && input.isVolunteer === undefined) {
+    throw new ApiError(400, 'Role or volunteer flag is required', 'VALIDATION_ERROR');
+  }
+  if (input.role !== undefined) data.role = input.role;
+  if (input.isVolunteer !== undefined) data.isVolunteer = input.isVolunteer;
+  const user = await prisma.user.update({ where: { id: userId }, data });
+  return publicUser(user);
+}
+
+module.exports = { listMembers, getMember, updateMe, updateMember, updateStatus, updateRole };

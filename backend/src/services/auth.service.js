@@ -1,94 +1,95 @@
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const prisma = require('../config/db');
+const prisma = require('../lib/prisma');
+const { ApiError } = require('../lib/errors');
+const { signToken, publicUser } = require('../lib/authToken');
+const { money } = require('../lib/money');
+const { DEFAULT_PREFS, getOrganization } = require('./settings.service');
 
-const generateToken = (id) =>
-  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+let dummyHash;
 
-/**
- * Register a new user with member profile
- */
-const register = async ({ email, password, firstName, lastName, studentId, phone }) => {
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) throw Object.assign(new Error('Email already registered'), { statusCode: 409 });
+async function invalidHash() {
+  if (!dummyHash) dummyHash = await bcrypt.hash('invalid-password', 10);
+  return dummyHash;
+}
 
-  const existingStudent = await prisma.member.findUnique({ where: { studentId } });
-  if (existingStudent) throw Object.assign(new Error('Student ID already registered'), { statusCode: 409 });
+function membershipSummary(membership) {
+  if (!membership) return null;
+  return {
+    id: membership.id,
+    status: membership.status,
+    endDate: membership.endDate,
+    planName: membership.plan.name,
+    paymentStatus: membership.paymentStatus,
+    duesAmount: money(membership.duesAmount),
+  };
+}
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+async function currentMembership(userId) {
+  return prisma.membership.findFirst({
+    where: { userId, status: 'ACTIVE', endDate: { gte: new Date() } },
+    include: { plan: true },
+    orderBy: { endDate: 'desc' },
+  });
+}
 
+async function register(input) {
+  const existing = await prisma.user.findUnique({ where: { email: input.email.toLowerCase() } });
+  if (existing) {
+    throw new ApiError(409, 'An account with that email already exists', 'CONFLICT');
+  }
+  const settings = await getOrganization();
+  const defaults = settings.notificationDefaults || DEFAULT_PREFS;
   const user = await prisma.user.create({
     data: {
-      email,
-      password: hashedPassword,
+      name: input.name,
+      email: input.email.toLowerCase(),
+      passwordHash: await bcrypt.hash(input.password, 10),
+      phone: input.phone,
+      studentId: input.studentId,
       role: 'MEMBER',
-      member: {
-        create: { studentId, firstName, lastName, phone },
-      },
+      notificationPreferences: defaults,
     },
-    include: { member: true },
   });
+  return {
+    token: signToken(user),
+    user: publicUser(user, null),
+  };
+}
 
-  return { token: generateToken(user.id), user: sanitizeUser(user) };
-};
-
-/**
- * Login an existing user
- */
-const login = async ({ email, password }) => {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: { member: true },
-  });
-
-  if (!user || !user.isActive) {
-    throw Object.assign(new Error('Invalid credentials'), { statusCode: 401 });
+async function login(input) {
+  const user = await prisma.user.findUnique({ where: { email: input.email.toLowerCase() } });
+  const hash = user ? user.passwordHash : await invalidHash();
+  const matches = await bcrypt.compare(input.password, hash);
+  if (!user || !matches) {
+    throw new ApiError(401, 'Invalid email or password', 'INVALID_CREDENTIALS');
   }
+  if (user.status !== 'ACTIVE') {
+    throw new ApiError(403, 'Account is suspended', 'FORBIDDEN');
+  }
+  const membership = await currentMembership(user.id);
+  return {
+    token: signToken(user),
+    user: publicUser(user, membershipSummary(membership)),
+  };
+}
 
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) throw Object.assign(new Error('Invalid credentials'), { statusCode: 401 });
-
-  return { token: generateToken(user.id), user: sanitizeUser(user) };
-};
-
-/**
- * Get authenticated user's profile
- */
-const getMe = async (userId) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      member: {
-        include: {
-          memberships: {
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-          },
-        },
-      },
-    },
-  });
-
-  if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
-  return sanitizeUser(user);
-};
-
-/**
- * Change password
- */
-const changePassword = async (userId, { currentPassword, newPassword }) => {
+async function me(userId) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  const isMatch = await bcrypt.compare(currentPassword, user.password);
-  if (!isMatch) throw Object.assign(new Error('Current password is incorrect'), { statusCode: 400 });
+  const membership = await currentMembership(userId);
+  return publicUser(user, membershipSummary(membership));
+}
 
-  const hashed = await bcrypt.hash(newPassword, 10);
-  await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
-  return { message: 'Password updated successfully' };
-};
+async function changePassword(userId, input) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const matches = await bcrypt.compare(input.currentPassword, user.passwordHash);
+  if (!matches) {
+    throw new ApiError(400, 'Current password is incorrect', 'VALIDATION_ERROR');
+  }
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: await bcrypt.hash(input.newPassword, 10) },
+  });
+  return { updated: true };
+}
 
-const sanitizeUser = (user) => {
-  const { password, ...safe } = user;
-  return safe;
-};
-
-module.exports = { register, login, getMe, changePassword };
+module.exports = { register, login, me, changePassword, currentMembership, membershipSummary };

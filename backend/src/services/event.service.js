@@ -1,126 +1,192 @@
-const prisma = require('../config/db');
+const prisma = require('../lib/prisma');
+const { ApiError } = require('../lib/errors');
+const { money, roundMoney } = require('../lib/money');
+const { pageParams, sortOrder } = require('../lib/paging');
+const { currentMembership } = require('./auth.service');
 
-/**
- * Create an event
- */
-const createEvent = async (data) => {
-  const { title, description, venue, startDate, endDate, totalCapacity, memberPrice, nonMemberPrice, coverImage } = data;
-
-  return prisma.event.create({
-    data: {
-      title,
-      description,
-      venue,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-      totalCapacity: Number(totalCapacity),
-      remainingSeats: Number(totalCapacity),
-      memberPrice: Number(memberPrice),
-      nonMemberPrice: Number(nonMemberPrice),
-      coverImage,
-      status: 'DRAFT',
-    },
-  });
-};
-
-/**
- * Get all events with filters
- */
-const getAllEvents = async ({ page = 1, limit = 20, status, upcoming }) => {
-  const skip = (page - 1) * limit;
-  const now = new Date();
-
-  const where = {
-    ...(status && { status }),
-    ...(upcoming === 'true' && { startDate: { gt: now }, status: 'PUBLISHED' }),
+function heldTicketWhere(now = new Date()) {
+  return {
+    OR: [
+      { status: { in: ['PAID', 'USED'] } },
+      { status: 'PENDING', holdExpiresAt: { gt: now } },
+    ],
   };
+}
 
-  const [events, total] = await Promise.all([
+async function seatsTaken(eventId, db = prisma) {
+  return db.ticket.count({
+    where: { eventId, ...heldTicketWhere() },
+  });
+}
+
+function priceFor(event, membership) {
+  if (!membership) {
+    return { ticketType: 'NON_MEMBER', price: roundMoney(event.nonMemberPrice) };
+  }
+  const discount = Number(membership.plan.ticketDiscountPercent) / 100;
+  return {
+    ticketType: 'MEMBER',
+    price: roundMoney(Number(event.memberPrice) * (1 - discount)),
+  };
+}
+
+async function serializeEvent(event, user, taken, knownMembership) {
+  const used = taken == null ? await seatsTaken(event.id) : taken;
+  const payload = {
+    id: event.id,
+    title: event.title,
+    description: event.description,
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    venue: event.venue,
+    capacity: event.capacity,
+    remainingSeats: event.capacity - used,
+    memberPrice: money(event.memberPrice),
+    nonMemberPrice: money(event.nonMemberPrice),
+    status: event.status,
+    createdById: event.createdById,
+    createdAt: event.createdAt,
+  };
+  if (user) {
+    const membership = knownMembership === undefined ? await currentMembership(user.id) : knownMembership;
+    const priced = priceFor(event, membership);
+    payload.viewerPrice = priced.price;
+    payload.viewerTicketType = priced.ticketType;
+  }
+  return payload;
+}
+
+async function listEvents(user, query) {
+  const { page, limit, skip } = pageParams(query);
+  const where = {};
+  const isAdmin = user?.role === 'ADMIN';
+  if (!isAdmin) where.status = 'PUBLISHED';
+  else if (query.status) where.status = query.status;
+  if (query.search) where.title = { contains: query.search, mode: 'insensitive' };
+  if (query.date) {
+    const day = new Date(query.date);
+    const next = new Date(day);
+    next.setDate(next.getDate() + 1);
+    where.startsAt = { gte: day, lt: next };
+  }
+  const [total, rows] = await prisma.$transaction([
+    prisma.event.count({ where }),
     prisma.event.findMany({
       where,
       skip,
-      take: Number(limit),
-      orderBy: { startDate: 'asc' },
-      include: {
-        _count: { select: { tickets: true } },
-      },
+      take: limit,
+      orderBy: sortOrder(query, ['startsAt', 'title', 'createdAt'], { startsAt: 'asc' }),
     }),
-    prisma.event.count({ where }),
   ]);
+  const membership = user ? await currentMembership(user.id) : null;
+  const data = [];
+  for (const event of rows) data.push(await serializeEvent(event, user, undefined, membership));
+  return { data, meta: { page, limit, total } };
+}
 
-  return { events, total, page: Number(page), totalPages: Math.ceil(total / limit) };
-};
+async function getEvent(eventId, user) {
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) throw new ApiError(404, 'Event not found', 'NOT_FOUND');
+  if (event.status !== 'PUBLISHED' && user?.role !== 'ADMIN') {
+    throw new ApiError(404, 'Event not found', 'NOT_FOUND');
+  }
+  return serializeEvent(event, user);
+}
 
-/**
- * Get event by ID with full details
- */
-const getEventById = async (id) => {
-  const event = await prisma.event.findUnique({
-    where: { id },
-    include: {
-      _count: { select: { tickets: true } },
-      tickets: {
-        where: { status: 'CHECKED_IN' },
-        select: { id: true },
-      },
-    },
+async function createEvent(userId, input) {
+  if (new Date(input.endsAt) <= new Date(input.startsAt)) {
+    throw new ApiError(400, 'Event end must be after the start', 'VALIDATION_ERROR');
+  }
+  const event = await prisma.event.create({
+    data: { ...input, createdById: userId, status: input.status || 'DRAFT' },
   });
-  if (!event) throw Object.assign(new Error('Event not found'), { statusCode: 404 });
-  return event;
-};
+  return serializeEvent(event, { id: userId, role: 'ADMIN' });
+}
 
-/**
- * Update an event
- */
-const updateEvent = async (id, data) => {
-  const event = await prisma.event.findUnique({ where: { id } });
-  if (!event) throw Object.assign(new Error('Event not found'), { statusCode: 404 });
-  if (event.status === 'COMPLETED' || event.status === 'CANCELLED') {
-    throw Object.assign(new Error('Cannot update a completed or cancelled event'), { statusCode: 400 });
+async function updateEvent(eventId, input) {
+  const existing = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!existing) throw new ApiError(404, 'Event not found', 'NOT_FOUND');
+  const startsAt = input.startsAt || existing.startsAt;
+  const endsAt = input.endsAt || existing.endsAt;
+  if (new Date(endsAt) <= new Date(startsAt)) {
+    throw new ApiError(400, 'Event end must be after the start', 'VALIDATION_ERROR');
   }
-
-  const updateData = { ...data };
-  if (data.startDate) updateData.startDate = new Date(data.startDate);
-  if (data.endDate) updateData.endDate = new Date(data.endDate);
-  if (data.totalCapacity) {
-    const soldTickets = await prisma.ticket.count({ where: { eventId: id, status: { in: ['BOOKED', 'CHECKED_IN'] } } });
-    if (Number(data.totalCapacity) < soldTickets) {
-      throw Object.assign(new Error('New capacity cannot be less than tickets already sold'), { statusCode: 400 });
+  if (input.capacity != null) {
+    const taken = await seatsTaken(eventId);
+    if (input.capacity < taken) {
+      throw new ApiError(409, 'Capacity is below tickets already held', 'CAPACITY_EXCEEDED');
     }
-    updateData.remainingSeats = Number(data.totalCapacity) - soldTickets;
   }
+  const event = await prisma.event.update({ where: { id: eventId }, data: input });
+  return serializeEvent(event, { id: existing.createdById, role: 'ADMIN' });
+}
 
-  return prisma.event.update({ where: { id }, data: updateData });
-};
+async function updateEventStatus(eventId, status) {
+  const existing = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!existing) throw new ApiError(404, 'Event not found', 'NOT_FOUND');
+  if (status !== 'CANCELLED') return updateEvent(eventId, { status });
 
-/**
- * Publish / change event status
- */
-const updateEventStatus = async (id, status) => {
-  return prisma.event.update({ where: { id }, data: { status } });
-};
+  await prisma.runTransaction(async (tx) => {
+    await tx.event.update({ where: { id: eventId }, data: { status: 'CANCELLED' } });
+    const pending = await tx.ticket.findMany({
+      where: { eventId, status: 'PENDING' },
+      select: { paymentId: true },
+    });
+    await tx.ticket.updateMany({
+      where: { eventId, status: 'PENDING' },
+      data: { status: 'CANCELLED' },
+    });
+    const paymentIds = pending.map((ticket) => ticket.paymentId).filter(Boolean);
+    if (paymentIds.length) {
+      await tx.payment.updateMany({
+        where: { id: { in: paymentIds }, status: 'CREATED' },
+        data: { status: 'FAILED' },
+      });
+    }
+  });
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  return serializeEvent(event, { id: event.createdById, role: 'ADMIN' });
+}
 
-/**
- * Delete event (only if DRAFT)
- */
-const deleteEvent = async (id) => {
-  const event = await prisma.event.findUnique({ where: { id } });
-  if (!event) throw Object.assign(new Error('Event not found'), { statusCode: 404 });
-  if (event.status !== 'DRAFT') throw Object.assign(new Error('Only draft events can be deleted'), { statusCode: 400 });
-  return prisma.event.delete({ where: { id } });
-};
-
-/**
- * Get event statistics
- */
-const getEventStats = async (id) => {
-  const [ticketsSold, checkedIn, revenue] = await Promise.all([
-    prisma.ticket.count({ where: { eventId: id, status: { in: ['BOOKED', 'CHECKED_IN'] } } }),
-    prisma.ticket.count({ where: { eventId: id, status: 'CHECKED_IN' } }),
-    prisma.ticket.aggregate({ where: { eventId: id, status: { in: ['BOOKED', 'CHECKED_IN'] } }, _sum: { price: true } }),
+async function analytics(eventId) {
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) throw new ApiError(404, 'Event not found', 'NOT_FOUND');
+  const ticketIds = (await prisma.ticket.findMany({ where: { eventId }, select: { id: true } })).map((ticket) => ticket.id);
+  const [sold, checkedIn, revenue] = await Promise.all([
+    prisma.ticket.count({ where: { eventId, status: { in: ['PAID', 'USED'] } } }),
+    prisma.attendance.count({ where: { eventId } }),
+    ticketIds.length
+      ? prisma.transaction.aggregate({
+          where: {
+            status: 'POSTED',
+            type: 'INCOME',
+            category: 'EVENT_TICKET',
+            referenceType: 'TICKET',
+            referenceId: { in: ticketIds },
+          },
+          _sum: { amount: true },
+        })
+      : Promise.resolve({ _sum: { amount: 0 } }),
   ]);
+  const taken = await seatsTaken(eventId);
+  return {
+    capacity: event.capacity,
+    remainingSeats: event.capacity - taken,
+    ticketsSold: sold,
+    checkedIn,
+    revenue: money(revenue._sum.amount) || 0,
+  };
+}
 
-  return { ticketsSold, checkedIn, revenue: revenue._sum.price || 0 };
+module.exports = {
+  seatsTaken,
+  priceFor,
+  heldTicketWhere,
+  listEvents,
+  getEvent,
+  createEvent,
+  updateEvent,
+  updateEventStatus,
+  analytics,
+  serializeEvent,
 };
-
-module.exports = { createEvent, getAllEvents, getEventById, updateEvent, updateEventStatus, deleteEvent, getEventStats };

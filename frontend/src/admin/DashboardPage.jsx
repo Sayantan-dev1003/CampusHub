@@ -1,15 +1,32 @@
 import React from 'react';
+import { Boxes, CalendarDays, CalendarPlus, Flag, Hourglass, IdCard, ListTodo, Megaphone, Package, ShoppingCart, Ticket, UserRound, Users } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ago, count, money, shortId, when } from './format';
 import { useApi } from './useApi';
 
 const ACTIONS = [
-  { section: 'events', id: 'new', label: 'Create event' },
-  { section: 'members', id: 'new', label: 'Add member' },
-  { section: 'products', id: 'new', label: 'Add product' },
-  { section: 'announcements', id: 'new', label: 'Create announcement' },
-  { section: 'initiatives', id: 'new', label: 'Create initiative' },
+  { section: 'events', id: 'new', label: 'Create event', icon: CalendarPlus },
+  { section: 'members', id: 'new', label: 'Add member', icon: UserRound },
+  { section: 'products', id: 'new', label: 'Add product', icon: Package },
+  { section: 'announcements', id: 'new', label: 'Create announcement', icon: Megaphone },
+  { section: 'initiatives', id: 'new', label: 'Create initiative', icon: Flag },
 ];
+
+const STATUS = {
+  ACTIVE: 'ok', PAID: 'ok', PUBLISHED: 'ok', COMPLETED: 'ok', DONE: 'ok', REIMBURSED: 'ok', USED: 'ok', READY: 'ok', POSTED: 'ok',
+  PENDING: 'wait', DRAFT: 'wait', PROCESSING: 'wait', IN_PROGRESS: 'wait', APPROVED: 'wait', PLANNED: 'wait',
+  EXPIRED: 'bad', CANCELLED: 'bad', REJECTED: 'bad', SUSPENDED: 'bad',
+  ARCHIVED: 'muted', MEMBER: 'muted', ADMIN: 'ok', TREASURER: 'wait', PUBLIC: 'muted', MEMBERS: 'ok',
+  FUNDRAISER: 'wait', GENERAL: 'muted', INCOME: 'ok', EXPENSE: 'bad', NONE: 'muted',
+};
+
+export function StatusPill({ value }) {
+  if (value == null || value === '' || value === '—') return '—';
+  const key = String(value).toUpperCase();
+  const tone = STATUS[key];
+  if (!tone) return value;
+  return <span className={`desk-pill tone-${tone}`}>{key.toLowerCase().replace(/_/g, ' ')}</span>;
+}
 
 export default function DashboardPage({ currency }) {
   const { navigate } = useApp();
@@ -21,14 +38,14 @@ export default function DashboardPage({ currency }) {
   if (!data) return null;
 
   const cards = [
-    ['Total members', data.totalMembers],
-    ['Active memberships', data.activeMemberships],
-    ['Upcoming events', data.upcomingEvents],
-    ['Tickets sold', data.ticketsSold],
-    ['Pending orders', data.pendingOrders],
-    ['Pending tasks', data.openTasks],
-    ['Expiring memberships', data.expiringMemberships],
-    ['Low stock products', data.lowStockCount],
+    ['Total members', data.totalMembers, Users],
+    ['Active memberships', data.activeMemberships, IdCard],
+    ['Upcoming events', data.upcomingEvents, CalendarDays],
+    ['Tickets sold', data.ticketsSold, Ticket],
+    ['Pending orders', data.pendingOrders, ShoppingCart],
+    ['Pending tasks', data.openTasks, ListTodo],
+    ['Expiring memberships', data.expiringMemberships, Hourglass],
+    ['Low stock products', data.lowStockCount, Boxes],
   ];
 
   return (
@@ -42,12 +59,40 @@ export default function DashboardPage({ currency }) {
       </header>
 
       <section className="kpi-grid">
-        {cards.map(([label, value]) => (
+        {cards.map(([label, value, Icon]) => (
           <article key={label} className="kpi-card">
+            <span className="kpi-ico" aria-hidden="true"><Icon size={18} /></span>
             <span>{label}</span>
             <strong>{count(value)}</strong>
           </article>
         ))}
+      </section>
+
+      <section className="ledger-strip">
+        <article>
+          <span>Ledger income</span>
+          <strong>{money(data.revenue, currency)}</strong>
+        </article>
+        <article>
+          <span>Pending expenses</span>
+          <strong>{count(data.pendingExpenses)}</strong>
+        </article>
+        <article>
+          <span>Open orders</span>
+          <strong>{count(data.openOrders)}</strong>
+        </article>
+      </section>
+
+      <section className="action-row" aria-label="Quick actions">
+        {ACTIONS.map((action) => {
+          const Icon = action.icon;
+          return (
+            <button key={action.label} type="button" onClick={() => go(action.section, action.id)}>
+              <Icon size={16} />
+              {action.label}
+            </button>
+          );
+        })}
       </section>
 
       <div className="desk-split">
@@ -65,7 +110,7 @@ export default function DashboardPage({ currency }) {
                   <span>{when(event.startsAt)}{event.venue ? ` · ${event.venue}` : ''}</span>
                   <span>{count(event.ticketsSold)} / {count(event.capacity)} tickets sold · {count(event.checkedIn)} checked in</span>
                 </div>
-                <button type="button" onClick={() => go('events', event.id)}>View event</button>
+                <button type="button" className="ghost-btn" onClick={() => go('events', event.id)}>View event</button>
               </li>
             ))}
           </ul>
@@ -73,22 +118,20 @@ export default function DashboardPage({ currency }) {
 
         <section className="desk-panel">
           <div className="panel-head">
-            <h2>Membership</h2>
-            <button type="button" onClick={() => go('memberships')}>Open</button>
+            <h2>Recent announcements</h2>
+            <button type="button" onClick={() => go('announcements')}>All</button>
           </div>
-          <div className="stat-rows">
-            {[
-              ['Active', data.membership?.active],
-              ['Expiring soon', data.membership?.expiringSoon],
-              ['Expired', data.membership?.expired],
-              ['Unpaid', data.membership?.unpaid],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <span>{label}</span>
-                <strong>{count(value)}</strong>
-              </div>
+          {(data.announcements || []).length === 0 && <p className="desk-empty">Nothing published.</p>}
+          <ul className="stack-list">
+            {(data.announcements || []).map((item) => (
+              <li key={item.id}>
+                <div>
+                  <strong>{item.title}</strong>
+                  <span>{ago(item.publishedAt)}</span>
+                </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
       </div>
 
@@ -134,38 +177,6 @@ export default function DashboardPage({ currency }) {
         </section>
       </div>
 
-      <div className="desk-split">
-        <section className="desk-panel">
-          <div className="panel-head">
-            <h2>Recent announcements</h2>
-            <button type="button" onClick={() => go('announcements')}>All</button>
-          </div>
-          {(data.announcements || []).length === 0 && <p className="desk-empty">Nothing published.</p>}
-          <ul className="stack-list">
-            {(data.announcements || []).map((item) => (
-              <li key={item.id}>
-                <div>
-                  <strong>{item.title}</strong>
-                  <span>{ago(item.publishedAt)}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="desk-panel">
-          <div className="panel-head">
-            <h2>Quick actions</h2>
-          </div>
-          <div className="action-grid">
-            {ACTIONS.map((action) => (
-              <button key={action.label} type="button" onClick={() => go(action.section, action.id)}>
-                + {action.label}
-              </button>
-            ))}
-          </div>
-        </section>
-      </div>
     </div>
   );
 }
@@ -190,8 +201,14 @@ export function PageFrame({ kicker, title, lede, action, children }) {
   );
 }
 
+function present(value) {
+  if (value == null || value === '') return '—';
+  if (typeof value === 'string' || typeof value === 'number') return <StatusPill value={value} />;
+  return value;
+}
+
 export function DataTable({ columns, rows, empty }) {
-  if (!rows?.length) return <p className="desk-empty">{empty || 'Nothing here yet.'}</p>;
+  if (!rows?.length) return <div className="desk-empty-card"><p>{empty || 'Nothing here yet.'}</p></div>;
   return (
     <div className="table-wrap">
       <table className="desk-table">
@@ -201,12 +218,34 @@ export function DataTable({ columns, rows, empty }) {
         <tbody>
           {rows.map((row) => (
             <tr key={row.id || row.key}>
-              {columns.map((column) => <td key={column.key}>{column.render ? column.render(row) : row[column.key]}</td>)}
+              {columns.map((column) => <td key={column.key}>{present(column.render ? column.render(row) : row[column.key])}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+export function Breakdown({ title, rows, currency }) {
+  const items = rows || [];
+  const max = Math.max(...items.map((row) => Number(row.amount) || 0), 1);
+  return (
+    <section className="desk-panel">
+      <div className="panel-head"><h2>{title}</h2></div>
+      {items.length === 0 && <p className="desk-empty">No figures yet.</p>}
+      <ul className="bar-list">
+        {items.map((row) => (
+          <li key={row.category}>
+            <div>
+              <span>{String(row.category || '').toLowerCase().replace(/_/g, ' ')}</span>
+              <strong>{money(row.amount, currency)}</strong>
+            </div>
+            <div className="meter" aria-hidden="true"><span style={{ width: `${((Number(row.amount) || 0) / max) * 100}%` }} /></div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 import { money, shortId, toOffsetIso, when, whenTime } from './format';
-import { DataTable, LoadState, PageFrame } from './DashboardPage';
+import { Breakdown, DataTable, LoadState, PageFrame } from './DashboardPage';
 import { useApi } from './useApi';
 
 function NewButton({ label, onClick }) {
@@ -10,8 +10,12 @@ function NewButton({ label, onClick }) {
 }
 
 export function MembersPage({ mode }) {
-  const { navigate, addToast } = useApp();
-  const path = mode === 'expiring' ? '/members?membership=EXPIRING&limit=100' : '/members?limit=100';
+  const { navigate } = useApp();
+  const [term, setTerm] = useState('');
+  const [search, setSearch] = useState('');
+  const path = mode === 'expiring'
+    ? '/members?membership=EXPIRING&limit=100'
+    : `/members?limit=100${search ? `&search=${encodeURIComponent(search)}` : ''}`;
   const query = useApi(mode === 'new' ? null : path, mode !== 'new');
   if (mode === 'new') return <MemberForm />;
 
@@ -22,6 +26,12 @@ export function MembersPage({ mode }) {
       lede={mode === 'expiring' ? 'Active memberships that end within 30 days.' : 'Everyone with a CampusHub account.'}
       action={mode === 'expiring' ? null : <NewButton label="Add member" onClick={() => navigate('admin', { section: 'members', id: 'new' })} />}
     >
+      {mode !== 'expiring' && (
+        <form className="desk-toolbar" onSubmit={(event) => { event.preventDefault(); setSearch(term.trim()); }}>
+          <input value={term} onChange={(event) => setTerm(event.target.value)} placeholder="Search name, email, or student ID" />
+          <button className="desk-primary" type="submit">Search</button>
+        </form>
+      )}
       <LoadState loading={query.loading} error={query.error}>
         <DataTable
           empty={mode === 'expiring' ? 'No memberships expire in the next 30 days.' : 'No members yet.'}
@@ -37,7 +47,6 @@ export function MembersPage({ mode }) {
           ]}
         />
       </LoadState>
-      {query.error && addToast ? null : null}
     </PageFrame>
   );
 }
@@ -127,7 +136,7 @@ export function MembershipsPage() {
 }
 
 export function EventsPage({ eventId }) {
-  const { navigate, addToast } = useApp();
+  const { navigate } = useApp();
   const query = useApi(!eventId ? '/events?limit=100' : null, !eventId);
   if (eventId === 'new') return <EventForm />;
   if (eventId) return <EventDetail eventId={eventId} />;
@@ -151,7 +160,6 @@ export function EventsPage({ eventId }) {
           ]}
         />
       </LoadState>
-      {addToast ? null : null}
     </PageFrame>
   );
 }
@@ -224,11 +232,38 @@ function EventForm() {
 }
 
 function EventDetail({ eventId }) {
+  const { addToast } = useApp();
   const event = useApi(`/events/${eventId}`);
   const stats = useApi(`/events/${eventId}/analytics`);
   const attendance = useApi(`/events/${eventId}/attendance`);
+  const [busy, setBusy] = useState('');
+
+  const setStatus = async (status) => {
+    setBusy(status);
+    try {
+      await api(`/events/${eventId}/status`, { method: 'PATCH', body: { status } });
+      addToast('Event updated', status.toLowerCase(), 'success');
+      event.reload();
+    } catch (err) {
+      addToast('Could not update event', err.message, 'error');
+    } finally {
+      setBusy('');
+    }
+  };
+
   return (
-    <PageFrame kicker="Events" title={event.data?.title || 'Event'} lede={event.data ? `${whenTime(event.data.startsAt)} · ${event.data.venue}` : ''}>
+    <PageFrame
+      kicker="Events"
+      title={event.data?.title || 'Event'}
+      lede={event.data ? `${whenTime(event.data.startsAt)} · ${event.data.venue}` : ''}
+      action={event.data ? (
+        <div className="row-actions">
+          {event.data.status !== 'PUBLISHED' && <button type="button" className="desk-primary" disabled={Boolean(busy)} onClick={() => setStatus('PUBLISHED')}>{busy === 'PUBLISHED' ? 'Saving…' : 'Publish'}</button>}
+          {event.data.status === 'PUBLISHED' && <button type="button" className="ghost-btn" disabled={Boolean(busy)} onClick={() => setStatus('COMPLETED')}>Mark completed</button>}
+          {event.data.status !== 'CANCELLED' && <button type="button" className="ghost-btn" disabled={Boolean(busy)} onClick={() => setStatus('CANCELLED')}>Cancel</button>}
+        </div>
+      ) : null}
+    >
       <LoadState loading={event.loading || stats.loading} error={event.error || stats.error}>
         <div className="mini-kpis">
           <article><span>Sold</span><strong>{stats.data?.ticketsSold ?? 0}</strong></article>
@@ -253,10 +288,32 @@ function EventDetail({ eventId }) {
 }
 
 export function TicketsPage({ eventId }) {
-  const { navigate } = useApp();
+  const { navigate, addToast } = useApp();
   const events = useApi('/events?limit=100');
   const attendance = useApi(eventId ? `/events/${eventId}/attendance` : null, Boolean(eventId));
   const stats = useApi(eventId ? `/events/${eventId}/analytics` : null, Boolean(eventId));
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const checkIn = async (event) => {
+    event.preventDefault();
+    if (!eventId) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api('/tickets/check-in', { method: 'POST', body: { qrToken: token.trim() } });
+      addToast('Checked in', 'Ticket marked as used', 'success');
+      setToken('');
+      attendance.reload();
+      stats.reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <PageFrame kicker="Events" title="Tickets and attendance" lede="Pick an event to see sold seats and the door list.">
       <LoadState loading={events.loading} error={events.error}>
@@ -268,6 +325,11 @@ export function TicketsPage({ eventId }) {
         </label>
         {eventId && (
           <LoadState loading={stats.loading || attendance.loading} error={stats.error || attendance.error}>
+            <form className="desk-toolbar" onSubmit={checkIn}>
+              <input value={token} onChange={(event) => setToken(event.target.value)} placeholder="Paste a ticket QR token" required />
+              <button className="desk-primary" type="submit" disabled={busy}>{busy ? 'Checking…' : 'Check in'}</button>
+            </form>
+            {error && <p className="desk-error">{error}</p>}
             <div className="mini-kpis">
               <article><span>Tickets sold</span><strong>{stats.data?.ticketsSold ?? 0}</strong></article>
               <article><span>Checked in</span><strong>{stats.data?.checkedIn ?? 0}</strong></article>
@@ -366,7 +428,25 @@ function ProductForm() {
 }
 
 export function InventoryPage() {
+  const { addToast } = useApp();
   const query = useApi('/inventory/low-stock');
+  const [drafts, setDrafts] = useState({});
+  const [busy, setBusy] = useState('');
+
+  const saveStock = async (row) => {
+    const stockQuantity = Number(drafts[row.id] ?? row.stockQuantity);
+    setBusy(row.id);
+    try {
+      await api(`/variants/${row.id}/stock`, { method: 'PATCH', body: { stockQuantity } });
+      addToast('Stock updated', row.productName || 'Variant', 'success');
+      query.reload();
+    } catch (err) {
+      addToast('Could not update stock', err.message, 'error');
+    } finally {
+      setBusy('');
+    }
+  };
+
   return (
     <PageFrame kicker="Merchandise" title="Inventory" lede="Variants at or below their low-stock threshold.">
       <LoadState loading={query.loading} error={query.error}>
@@ -377,8 +457,11 @@ export function InventoryPage() {
             { key: 'productName', label: 'Product' },
             { key: 'size', label: 'Size' },
             { key: 'sku', label: 'SKU', render: (row) => row.sku || '—' },
-            { key: 'stockQuantity', label: 'On hand' },
+            { key: 'stockQuantity', label: 'On hand', render: (row) => (
+              <input className="stock-field" type="number" min="0" value={drafts[row.id] ?? row.stockQuantity} onChange={(event) => setDrafts({ ...drafts, [row.id]: event.target.value })} />
+            ) },
             { key: 'lowStockThreshold', label: 'Threshold' },
+            { key: 'save', label: '', render: (row) => <button type="button" className="ghost-btn" disabled={busy === row.id} onClick={() => saveStock(row)}>{busy === row.id ? 'Saving…' : 'Save'}</button> },
           ]}
         />
       </LoadState>
@@ -387,12 +470,28 @@ export function InventoryPage() {
 }
 
 export function OrdersPage({ currency }) {
+  const { addToast } = useApp();
   const query = useApi('/orders?limit=100');
+  const [busy, setBusy] = useState('');
+
+  const setStatus = async (row, status) => {
+    setBusy(row.id);
+    try {
+      await api(`/orders/${row.id}/status`, { method: 'PATCH', body: { status } });
+      addToast('Order updated', status.toLowerCase(), 'success');
+      query.reload();
+    } catch (err) {
+      addToast('Could not update order', err.message, 'error');
+    } finally {
+      setBusy('');
+    }
+  };
+
   return (
     <PageFrame kicker="Merchandise" title="Orders" lede="Paid and in-progress store orders.">
       <LoadState loading={query.loading} error={query.error}>
         <DataTable
-          empty="No orders yet."
+          empty="No orders yet. Merchandise orders will appear here after a purchase."
           rows={query.data || []}
           columns={[
             { key: 'id', label: 'Order', render: (row) => shortId(row.id) },
@@ -401,6 +500,16 @@ export function OrdersPage({ currency }) {
             { key: 'orderStatus', label: 'Status' },
             { key: 'paymentStatus', label: 'Payment' },
             { key: 'createdAt', label: 'Placed', render: (row) => when(row.createdAt) },
+            { key: 'next', label: 'Fulfillment', render: (row) => (
+              row.paymentStatus === 'PAID' ? (
+                <select className="stock-field" disabled={busy === row.id} value={row.orderStatus} onChange={(event) => setStatus(row, event.target.value)}>
+                  <option value={row.orderStatus}>{String(row.orderStatus || '').toLowerCase()}</option>
+                  {['PROCESSING', 'READY', 'COMPLETED'].filter((status) => status !== row.orderStatus).map((status) => (
+                    <option key={status} value={status}>{status.toLowerCase()}</option>
+                  ))}
+                </select>
+              ) : '—'
+            ) },
           ]}
         />
       </LoadState>
@@ -409,9 +518,24 @@ export function OrdersPage({ currency }) {
 }
 
 export function AnnouncementsPage({ mode }) {
-  const { navigate } = useApp();
+  const { navigate, addToast } = useApp();
   const query = useApi(mode === 'new' ? null : '/announcements?limit=100', mode !== 'new');
+  const [busy, setBusy] = useState('');
   if (mode === 'new') return <AnnouncementForm />;
+
+  const run = async (row, action) => {
+    setBusy(row.id);
+    try {
+      await api(`/announcements/${row.id}/${action}`, { method: 'POST' });
+      addToast(action === 'publish' ? 'Published' : 'Archived', row.title, 'success');
+      query.reload();
+    } catch (err) {
+      addToast('Could not update announcement', err.message, 'error');
+    } finally {
+      setBusy('');
+    }
+  };
+
   return (
     <PageFrame
       kicker="Communication"
@@ -428,6 +552,12 @@ export function AnnouncementsPage({ mode }) {
             { key: 'audience', label: 'Audience' },
             { key: 'status', label: 'Status' },
             { key: 'publishedAt', label: 'Published', render: (row) => whenTime(row.publishedAt) },
+            { key: 'actions', label: '', render: (row) => (
+              <div className="row-actions">
+                {row.status !== 'PUBLISHED' && <button type="button" className="ghost-btn" disabled={busy === row.id} onClick={() => run(row, 'publish')}>Publish</button>}
+                {row.status !== 'ARCHIVED' && <button type="button" className="ghost-btn" disabled={busy === row.id} onClick={() => run(row, 'archive')}>Archive</button>}
+              </div>
+            ) },
           ]}
         />
       </LoadState>
@@ -602,6 +732,10 @@ export function FinancePage({ currency }) {
           <article><span>Balance</span><strong>{money(query.data?.balance, currency)}</strong></article>
           <article><span>Pending reimbursements</span><strong>{money(query.data?.pendingReimbursements, currency)}</strong></article>
         </div>
+        <div className="desk-split">
+          <Breakdown title="Revenue by source" rows={query.data?.revenueBySource} currency={currency} />
+          <Breakdown title="Expenses by category" rows={query.data?.expensesByCategory} currency={currency} />
+        </div>
         <h2 className="section-label">Recent transactions</h2>
         <DataTable
           empty="No posted transactions."
@@ -687,6 +821,10 @@ export function ReportsPage() {
           <article><span>Income</span><strong>{money(finance.data?.income)}</strong></article>
           <article><span>Expenses</span><strong>{money(finance.data?.expenses)}</strong></article>
           <article><span>Balance</span><strong>{money(finance.data?.balance)}</strong></article>
+        </div>
+        <div className="desk-split">
+          <Breakdown title="Revenue by source" rows={finance.data?.revenueBySource} />
+          <Breakdown title="Expenses by category" rows={finance.data?.expensesByCategory} />
         </div>
       </LoadState>
     </PageFrame>

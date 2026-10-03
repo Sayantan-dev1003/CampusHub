@@ -14,6 +14,9 @@ import StorePage from './pages/StorePage';
 import ProductDetailsPage from './pages/ProductDetailsPage';
 import AboutPage from './pages/AboutPage';
 import AuthPage from './pages/AuthPage';
+import MemberDashboardPage from './pages/member/MemberDashboardPage';
+import MemberProfilePage from './pages/member/MemberProfilePage';
+import MemberLayout from './pages/member/MemberLayout';
 
 import './styles/theme.css';
 
@@ -38,20 +41,40 @@ function AppContent() {
         return <AuthPage initialMode="login" />;
       case 'register':
         return <AuthPage initialMode="register" />;
+      case 'member-dashboard':
+        return <MemberDashboardPage />;
+      case 'member-profile':
+        return <MemberProfilePage />;
+      case 'member-membership':
+      case 'member-tickets':
+      case 'member-orders':
+      case 'member-announcements':
+      case 'member-volunteer':
+      case 'member-notifications':
+        return (
+          <MemberLayout>
+            <div style={{ padding: '40px' }}>
+              <h2>Page Under Construction</h2>
+              <p>This section is coming soon.</p>
+            </div>
+          </MemberLayout>
+        );
       default:
         return <HomePage />;
     }
   };
 
   const isAuthPage = currentRoute.page === 'login' || currentRoute.page === 'register';
+  const isMemberPage = currentRoute.page.startsWith('member-');
+  const hidePublicLayout = isAuthPage || isMemberPage;
 
   return (
-    <div className={`app-layout${isAuthPage ? ' auth-layout' : ''}`}>
-      {!isAuthPage && <Navbar />}
-      <main className={`app-main-content ${isAuthPage ? 'auth-shell' : ''}`}>
+    <div className={`app-layout${hidePublicLayout ? ' auth-layout' : ''}`}>
+      {!hidePublicLayout && <Navbar />}
+      <main className={`app-main-content ${hidePublicLayout ? 'auth-shell' : ''}`}>
         {renderCurrentPage()}
       </main>
-      {!isAuthPage && <Footer />}
+      {!hidePublicLayout && <Footer />}
 
       {/* Global Drawers & Modals */}
       <CartDrawer />

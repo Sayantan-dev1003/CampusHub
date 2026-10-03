@@ -101,7 +101,7 @@ export function AppProvider({ children }) {
       const page = parts[0] || 'home';
       const paramId = parts[1] || null;
 
-      if (['home', 'events', 'store', 'about', 'login', 'register'].includes(page)) {
+      if (['home', 'events', 'store', 'about', 'login', 'register'].includes(page) || page.startsWith('member-')) {
         if (page === 'events' && paramId) {
           setCurrentRoute({ page: 'event-details', params: { id: paramId } });
         } else if (page === 'store' && paramId) {
@@ -168,7 +168,7 @@ export function AppProvider({ children }) {
     const session = toSessionUser(result.data.user);
     setUser(session);
     addToast('Signed in', session.name, 'success');
-    navigate('home');
+    navigate(session.role === 'MEMBER' ? 'member-dashboard' : 'home');
   };
 
   const signUp = async (account) => {
@@ -179,7 +179,7 @@ export function AppProvider({ children }) {
     const session = toSessionUser(result.data.user);
     setUser(session);
     addToast('Account created', session.name, 'success');
-    navigate('home');
+    navigate(session.role === 'MEMBER' ? 'member-dashboard' : 'home');
   };
 
   const logout = async () => {

@@ -2,6 +2,7 @@ const prisma = require('../lib/prisma');
 const { money } = require('../lib/money');
 const { currentMembership, membershipSummary } = require('./auth.service');
 const finance = require('./finance.service');
+const memberships = require('./membership.service');
 
 async function memberDashboard(user) {
   const now = new Date();
@@ -79,31 +80,112 @@ async function adminDashboard() {
     upcomingEvents,
     ticketsSold,
     openOrders,
+    pendingOrders,
     variants,
     openTasks,
     pendingExpenses,
     revenue,
+    membership,
+    upcomingRows,
+    recentOrderRows,
+    initiativeRows,
+    announcementRows,
   ] = await Promise.all([
     prisma.user.count({ where: { role: 'MEMBER' } }),
     prisma.membership.count({ where: { status: 'ACTIVE', endDate: { gte: now } } }),
     prisma.event.count({ where: { status: 'PUBLISHED', startsAt: { gte: now } } }),
     prisma.ticket.count({ where: { status: { in: ['PAID', 'USED'] } } }),
     prisma.order.count({ where: { orderStatus: { in: ['PAID', 'PROCESSING', 'READY'] } } }),
+    prisma.order.count({ where: { orderStatus: { in: ['PENDING', 'PAID', 'PROCESSING', 'READY'] } } }),
     prisma.productVariant.findMany({ select: { stockQuantity: true, lowStockThreshold: true } }),
     prisma.task.count({ where: { status: { in: ['TODO', 'IN_PROGRESS'] } } }),
     prisma.expense.count({ where: { status: 'PENDING' } }),
     prisma.transaction.aggregate({ where: { status: 'POSTED', type: 'INCOME' }, _sum: { amount: true } }),
+    memberships.stats(),
+    prisma.event.findMany({
+      where: { status: 'PUBLISHED', startsAt: { gte: now } },
+      orderBy: { startsAt: 'asc' },
+      take: 5,
+    }),
+    prisma.order.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: { items: { include: { productVariant: { include: { product: true } } } } },
+    }),
+    prisma.initiative.findMany({
+      where: { status: { in: ['PLANNED', 'ACTIVE'] } },
+      orderBy: { startDate: 'desc' },
+      take: 4,
+      include: { tasks: true },
+    }),
+    prisma.announcement.findMany({
+      where: { status: 'PUBLISHED' },
+      orderBy: { publishedAt: 'desc' },
+      take: 4,
+    }),
   ]);
+
+  const upcomingEventList = await Promise.all(upcomingRows.map(async (event) => {
+    const [sold, checkedIn] = await Promise.all([
+      prisma.ticket.count({ where: { eventId: event.id, status: { in: ['PAID', 'USED'] } } }),
+      prisma.attendance.count({ where: { eventId: event.id } }),
+    ]);
+    return {
+      id: event.id,
+      title: event.title,
+      startsAt: event.startsAt,
+      venue: event.venue,
+      capacity: event.capacity,
+      ticketsSold: sold,
+      checkedIn,
+    };
+  }));
+
   return {
     totalMembers,
     activeMemberships,
     upcomingEvents,
     ticketsSold,
     openOrders,
+    pendingOrders,
     lowStockCount: variants.filter((variant) => variant.stockQuantity <= variant.lowStockThreshold).length,
     openTasks,
     pendingExpenses,
+    expiringMemberships: membership.expiringSoon,
     revenue: money(revenue._sum.amount) || 0,
+    membership,
+    upcomingEventList,
+    recentOrders: recentOrderRows.map((order) => ({
+      id: order.id,
+      totalAmount: money(order.totalAmount),
+      orderStatus: order.orderStatus,
+      createdAt: order.createdAt,
+      items: order.items.map((item) => ({
+        name: item.productVariant?.product?.name || 'Item',
+        quantity: item.quantity,
+      })),
+    })),
+    initiatives: initiativeRows.map((initiative) => {
+      const tasks = initiative.tasks || [];
+      const completed = tasks.filter((task) => task.status === 'DONE').length;
+      const inProgress = tasks.filter((task) => task.status === 'IN_PROGRESS').length;
+      const pending = tasks.filter((task) => task.status === 'TODO').length;
+      const tracked = completed + inProgress + pending;
+      return {
+        id: initiative.id,
+        name: initiative.name,
+        status: initiative.status,
+        completed,
+        inProgress,
+        pending,
+        percent: tracked ? Math.round((completed / tracked) * 100) : 0,
+      };
+    }),
+    announcements: announcementRows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      publishedAt: row.publishedAt,
+    })),
   };
 }
 

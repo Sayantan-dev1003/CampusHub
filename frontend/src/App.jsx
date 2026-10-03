@@ -14,6 +14,7 @@ import StorePage from './pages/StorePage';
 import ProductDetailsPage from './pages/ProductDetailsPage';
 import AboutPage from './pages/AboutPage';
 import AuthPage from './pages/AuthPage';
+import AdminApp from './admin/AdminApp';
 import MemberDashboardPage from './pages/member/MemberDashboardPage';
 import MemberProfilePage from './pages/member/MemberProfilePage';
 import MemberMembershipPage from './pages/member/MemberMembershipPage';
@@ -51,6 +52,8 @@ function AppContent() {
         return <AuthPage initialMode="login" />;
       case 'register':
         return <AuthPage initialMode="register" />;
+      case 'admin':
+        return <AdminApp />;
       case 'member-dashboard':
         return <MemberDashboardPage />;
       case 'member-profile':
@@ -81,13 +84,14 @@ function AppContent() {
   };
 
   const isAuthPage = currentRoute.page === 'login' || currentRoute.page === 'register';
+  const isAdminPage = currentRoute.page === 'admin';
   const isMemberPage = currentRoute.page.startsWith('member-');
-  const hidePublicLayout = isAuthPage || isMemberPage;
+  const hidePublicLayout = isAuthPage || isAdminPage || isMemberPage;
 
   return (
-    <div className={`app-layout${hidePublicLayout ? ' auth-layout' : ''}`}>
+    <div className={`app-layout${isAuthPage ? ' auth-layout' : ''}`}>
       {!hidePublicLayout && <Navbar />}
-      <main className={`app-main-content ${hidePublicLayout ? 'auth-shell' : ''}`}>
+      <main className={`app-main-content ${isAuthPage ? 'auth-shell' : ''}`}>
         {renderCurrentPage()}
       </main>
       {!hidePublicLayout && <Footer />}

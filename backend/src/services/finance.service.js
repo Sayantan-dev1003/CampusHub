@@ -117,7 +117,7 @@ function mapExpenseCategory(category) {
 async function listExpenses(user, query) {
   const { page, limit, skip } = pageParams(query);
   const where = {};
-  if (user.role !== 'TREASURER') where.submittedById = user.id;
+  if (user.role !== 'TREASURER' && user.role !== 'ADMIN') where.submittedById = user.id;
   else if (query.mine === 'true') where.submittedById = user.id;
   if (query.status) where.status = query.status;
   const [total, rows] = await prisma.$transaction([

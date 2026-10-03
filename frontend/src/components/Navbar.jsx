@@ -137,6 +137,12 @@ export default function Navbar() {
                       </div>
                     </div>
                     <div className="dropdown-divider" />
+                    {user.role === 'ADMIN' && (
+                      <button className="dropdown-item" onClick={() => handleNav('admin', { section: 'dashboard' })}>
+                        <Compass size={16} />
+                        <span>Organizer desk</span>
+                      </button>
+                    )}
                     <button className="dropdown-item" onClick={() => handleNav('events')}>
                       <Calendar size={16} />
                       <span>Browse Events</span>

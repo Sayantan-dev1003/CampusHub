@@ -72,7 +72,16 @@ export function AppProvider({ children }) {
   useEffect(() => {
     localStorage.removeItem('campushub_user');
     api('/auth/me')
-      .then((result) => setUser(toSessionUser(result.data)))
+      .then((result) => {
+        const session = toSessionUser(result.data);
+        setUser(session);
+        const hash = (window.location.hash.replace('#', '') || 'home').replace(/^\/+/, '');
+        const page = hash.split('/').filter(Boolean)[0] || 'home';
+        if (['home', 'login', 'register'].includes(page)) {
+          if (session?.role === 'ADMIN') window.location.hash = 'admin/dashboard';
+          else if (session?.role === 'MEMBER') window.location.hash = 'member-dashboard';
+        }
+      })
       .catch(() => setUser(null))
       .finally(() => setAuthReady(true));
   }, []);
@@ -96,11 +105,17 @@ export function AppProvider({ children }) {
   // URL Hash Sync for standard browser navigation & bookmarking
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '') || 'home';
-      const parts = hash.split('/');
+      const hash = (window.location.hash.replace('#', '') || 'home').replace(/^\/+/, '');
+      const parts = hash.split('/').filter(Boolean);
       const page = parts[0] || 'home';
       const paramId = parts[1] || null;
 
+      if (page === 'admin') {
+        setCurrentRoute({ page: 'admin', params: { section: parts[1] || 'dashboard', id: parts[2] || null } });
+        return;
+      }
+
+  
       if (['home', 'events', 'store', 'about', 'login', 'register'].includes(page) || page.startsWith('member-')) {
         if (page === 'events' && paramId) {
           setCurrentRoute({ page: 'event-details', params: { id: paramId } });
@@ -129,6 +144,9 @@ export function AppProvider({ children }) {
       hash = `events/${params.id}`;
     } else if (page === 'product-details' && params.id) {
       hash = `store/${params.id}`;
+    } else if (page === 'admin') {
+      const section = params.section || 'dashboard';
+      hash = params.id ? `admin/${section}/${params.id}` : `admin/${section}`;
     }
     window.location.hash = hash;
   };
@@ -168,7 +186,10 @@ export function AppProvider({ children }) {
     const session = toSessionUser(result.data.user);
     setUser(session);
     addToast('Signed in', session.name, 'success');
-    navigate(session.role === 'MEMBER' ? 'member-dashboard' : 'home');
+    if (session.role === 'ADMIN') navigate('admin', { section: 'dashboard' });
+    else if (session.role === 'MEMBER') navigate('member-dashboard');
+    else navigate('home');
+    return session;
   };
 
   const signUp = async (account) => {
@@ -179,7 +200,9 @@ export function AppProvider({ children }) {
     const session = toSessionUser(result.data.user);
     setUser(session);
     addToast('Account created', session.name, 'success');
-    navigate(session.role === 'MEMBER' ? 'member-dashboard' : 'home');
+    if (session.role === 'ADMIN') navigate('admin', { section: 'dashboard' });
+    else if (session.role === 'MEMBER') navigate('member-dashboard');
+    else navigate('home');
   };
 
   const logout = async () => {

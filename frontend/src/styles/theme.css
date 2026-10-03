@@ -1,0 +1,293 @@
+/* ==========================================================================
+   CampusHub - Pastel Green Design System & Theme
+   ========================================================================== */
+
+:root {
+  /* Pastel Green Palette */
+  --color-primary: #2d6a4f;         /* Deep rich forest green for text contrast & buttons */
+  --color-primary-dark: #1b4332;    /* Dark forest for headings and dark contrast */
+  --color-primary-hover: #22543d;   /* Hover state */
+  
+  --color-sage: #52b788;           /* Elegant pastel sage accent */
+  --color-mint: #74c69d;           /* Fresh soft mint */
+  --color-pastel-light: #95d5b2;   /* Soft seafoam */
+  --color-pastel-pale: #b7e4c7;    /* Subtle highlight green */
+  --color-pastel-soft: #d8f3dc;    /* Pale mint background tint for chips & badges */
+  --color-pastel-cream: #ebf7ee;   /* Delicate card background */
+  
+  /* Backgrounds & Neutrals */
+  --bg-app: #f4f8f5;               /* Warm pastel sage cream background */
+  --bg-surface: #ffffff;           /* Clean white surface */
+  --bg-card: #ffffff;              /* Elevated card */
+  --bg-subtle: #f0f7f2;            /* Light subtle container */
+  --bg-accent-gradient: linear-gradient(135deg, #e8f5ed 0%, #d8f3dc 50%, #c1ebd3 100%);
+  --bg-hero-gradient: radial-gradient(circle at 10% 20%, #eaf5ee 0%, #f4f8f5 60%, #e5f2ea 100%);
+  --bg-glass: rgba(255, 255, 255, 0.88);
+  --bg-glass-subtle: rgba(255, 255, 255, 0.65);
+
+  /* Text & Typography */
+  --text-primary: #132a1e;         /* Crisp near-black botanical charcoal */
+  --text-secondary: #3b5a4a;       /* Soft green-slate for paragraphs */
+  --text-muted: #5e8070;           /* Subtle captions & timestamps */
+  --text-light: #ffffff;
+  
+  /* Borders */
+  --border-light: #dbebe0;
+  --border-focus: #52b788;
+  --border-accent: #b7e4c7;
+
+  /* Semantic Accents */
+  --accent-gold: #c8963e;          /* Warm member gold accent */
+  --accent-gold-bg: #fff8e7;
+  --accent-gold-border: #f6e2b3;
+  --status-instock: #2d6a4f;
+  --status-instock-bg: #d8f3dc;
+  --status-lowstock: #b75e18;
+  --status-lowstock-bg: #ffe8d6;
+  --status-outstock: #a63a3a;
+  --status-outstock-bg: #fde8e8;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 3px rgba(35, 78, 59, 0.05);
+  --shadow-sm: 0 3px 8px rgba(35, 78, 59, 0.06);
+  --shadow-md: 0 8px 24px rgba(35, 78, 59, 0.08);
+  --shadow-lg: 0 16px 40px rgba(35, 78, 59, 0.12);
+  --shadow-xl: 0 24px 55px rgba(27, 67, 50, 0.14);
+
+  /* Border Radii */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-smooth: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Fonts */
+  --font-heading: 'Outfit', sans-serif;
+  --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Base Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  color: var(--text-primary);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+/* Utilities */
+.container {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.badge-mint {
+  background-color: var(--color-pastel-soft);
+  color: var(--color-primary-dark);
+  border: 1px solid var(--border-accent);
+}
+
+.badge-member {
+  background-color: var(--accent-gold-bg);
+  color: var(--accent-gold);
+  border: 1px solid var(--accent-gold-border);
+}
+
+.badge-instock {
+  background-color: var(--status-instock-bg);
+  color: var(--status-instock);
+}
+
+.badge-lowstock {
+  background-color: var(--status-lowstock-bg);
+  color: var(--status-lowstock);
+}
+
+.badge-outstock {
+  background-color: var(--status-outstock-bg);
+  color: var(--status-outstock);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 22px;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  border: 1px solid transparent;
+  outline: none;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(45, 106, 79, 0.25);
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(45, 106, 79, 0.32);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background-color: var(--color-pastel-soft);
+  color: var(--color-primary-dark);
+  border: 1px solid var(--border-accent);
+}
+
+.btn-secondary:hover {
+  background-color: #c5ecd0;
+  transform: translateY(-2px);
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: var(--color-primary);
+  border: 1.5px solid var(--color-primary);
+}
+
+.btn-outline:hover {
+  background-color: var(--color-pastel-soft);
+  transform: translateY(-2px);
+}
+
+.btn-ghost {
+  background-color: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  background-color: rgba(82, 183, 136, 0.12);
+  color: var(--color-primary);
+}
+
+.btn-lg {
+  padding: 14px 28px;
+  font-size: 1.05rem;
+  border-radius: var(--radius-md);
+}
+
+.btn-sm {
+  padding: 7px 14px;
+  font-size: 0.85rem;
+  border-radius: var(--radius-xs);
+}
+
+/* Glass Card */
+.glass-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal);
+}
+
+.glass-card:hover {
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-md);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseSubtle {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: #eef5f0;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #b5d9c5;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #8fc7a8;
+}

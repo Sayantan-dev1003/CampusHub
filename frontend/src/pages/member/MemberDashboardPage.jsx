@@ -73,8 +73,8 @@ export default function MemberDashboardPage() {
           <div className="grid-col-left">
             <section className="quick-actions-section">
               <div className="action-buttons">
-                <button onClick={() => navigate('events')}>Browse Events</button>
-                <button onClick={() => navigate('store')}>Buy Merchandise</button>
+                <button onClick={() => navigate('member-events')}>Browse Events</button>
+                <button onClick={() => navigate('member-store')}>Buy Merchandise</button>
                 <button onClick={() => navigate('member-tickets')}>My Tickets</button>
               </div>
             </section>
@@ -82,7 +82,7 @@ export default function MemberDashboardPage() {
             <section className="dashboard-panel">
               <div className="panel-header">
                 <h2>Upcoming Events</h2>
-                <button className="btn-text" onClick={() => navigate('events')}>View All</button>
+                <button className="btn-text" onClick={() => navigate('member-events')}>View All</button>
               </div>
               <div className="event-list">
                 {upcomingEvents.map((event) => (
@@ -138,14 +138,14 @@ export default function MemberDashboardPage() {
                     <li>Voting rights</li>
                   </ul>
                 </div>
-                <button className="btn-outline-green mt-3">Renew Membership</button>
+                <button className="btn-outline-green mt-3" onClick={() => navigate('member-membership')}>Renew Membership</button>
               </div>
             </section>
 
             <section className="dashboard-panel">
               <div className="panel-header">
                 <h2>Recent Announcements</h2>
-                <button className="btn-text">View All</button>
+                <button className="btn-text" onClick={() => navigate('member-announcements')}>View All</button>
               </div>
               <ul className="announcement-list">
                 {announcements.map((ann) => (

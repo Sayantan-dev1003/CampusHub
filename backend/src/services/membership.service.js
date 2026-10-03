@@ -119,16 +119,45 @@ async function approve(memberId, planName = 'Silver') {
     });
   }
 
-  const start = new Date();
-  const end = new Date(start);
-  end.setMonth(end.getMonth() + plan.durationMonths);
+    const start = new Date();
+    const end = new Date(start);
+    end.setMonth(end.getMonth() + plan.durationMonths);
 
-  const existing = await prisma.membership.findFirst({ where: { userId: memberId } });
+    const existing = await prisma.membership.findFirst({ where: { userId: memberId } });
+    
+    if (existing) {
+      const membership = await prisma.membership.update({
+        where: { id: existing.id },
+        data: { status: 'PENDING', paymentStatus: 'PENDING', planId: plan.id, startDate: start, endDate: end },
+        include: { plan: true },
+      });
+      return serializeMembership(membership);
+    } else {
+      const membership = await prisma.membership.create({
+        data: {
+          userId: memberId,
+          planId: plan.id,
+          duesAmount: plan.fee,
+          paymentStatus: 'PENDING',
+          status: 'PENDING',
+          startDate: start,
+          endDate: end,
+        },
+        include: { plan: true },
+      });
+      return serializeMembership(membership);
+    }
+}
+
+async function request(memberId, planName) {
+  let plan = await prisma.membershipPlan.findFirst({ where: { name: planName } });
+  if (!plan) throw new ApiError(404, 'Plan not found', 'NOT_FOUND');
   
+  const existing = await prisma.membership.findFirst({ where: { userId: memberId } });
   if (existing) {
     const membership = await prisma.membership.update({
       where: { id: existing.id },
-      data: { status: 'PENDING', paymentStatus: 'PENDING', planId: plan.id, startDate: start, endDate: end },
+      data: { status: 'AWAITING_APPROVAL', planId: plan.id, duesAmount: plan.fee },
       include: { plan: true },
     });
     return serializeMembership(membership);
@@ -139,9 +168,7 @@ async function approve(memberId, planName = 'Silver') {
         planId: plan.id,
         duesAmount: plan.fee,
         paymentStatus: 'PENDING',
-        status: 'PENDING',
-        startDate: start,
-        endDate: end,
+        status: 'AWAITING_APPROVAL',
       },
       include: { plan: true },
     });
@@ -159,6 +186,7 @@ module.exports = {
   stats,
   suspend,
   approve,
+  request,
   pay: async (memberId) => {
     const existing = await prisma.membership.findFirst({ where: { userId: memberId }, include: { plan: true } });
     if (!existing) throw new ApiError(404, 'Membership not found', 'NOT_FOUND');
@@ -207,6 +235,12 @@ module.exports = {
           endDate: d
         },
         include: { plan: true },
+      });
+      
+      // 4. Update User isMember
+      await tx.user.update({
+        where: { id: memberId },
+        data: { isMember: true }
       });
       
       return serializeMembership(membership);

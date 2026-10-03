@@ -73,8 +73,16 @@ export default function MemberProfilePage() {
                   {formData.name ? formData.name.charAt(0).toUpperCase() : 'M'}
                 </div>
               </div>
-              <h3 className="profile-name-display">{formData.name || 'Member User'}</h3>
-              <p className="profile-role-display">{user?.isMember ? 'Active Member' : 'Member'}</p>
+              <h3 className="profile-name-display">
+                {formData.name || 'Member User'}
+                {user?.isMember && (
+                  <svg style={{ marginLeft: '8px', verticalAlign: 'middle' }} width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="10" fill="#2d6a4f" />
+                    <path d="M8 12.5L10.5 15L16 9" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </h3>
+              <p className="profile-role-display">{user?.isMember ? 'Active Member' : 'Non-Member'}</p>
             </section>
           </div>
 

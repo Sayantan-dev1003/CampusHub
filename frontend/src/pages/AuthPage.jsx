@@ -79,7 +79,7 @@ export default function AuthPage({ initialMode = 'login' }) {
         branch: form.branch.trim() || undefined,
         role: form.role,
         isVolunteer: form.role === 'MEMBER' ? form.isVolunteer : false,
-        planName: urlPlan || form.planName || 'Silver',
+        planName: urlPlan || undefined,
       });
     } catch (err) {
       setError(err.message || 'Could not create the account');
@@ -266,20 +266,7 @@ export default function AuthPage({ initialMode = 'login' }) {
                 </div>
               </div>
 
-              {!urlPlan && (
-                <div className="gate-field">
-                  <label htmlFor="signup-plan">Membership Plan</label>
-                  <select
-                    id="signup-plan"
-                    value={form.planName || 'Silver'}
-                    onChange={(event) => setForm({ ...form, planName: event.target.value })}
-                  >
-                    <option value="Silver">Silver (₹4000)</option>
-                    <option value="Gold">Gold (₹8000)</option>
-                    <option value="Platinum">Platinum (₹12000)</option>
-                  </select>
-                </div>
-              )}
+
 
               {form.role === 'MEMBER' && (
                 <label className="gate-check">

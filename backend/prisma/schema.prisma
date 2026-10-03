@@ -183,6 +183,7 @@ model User {
   email                    String     @unique
   passwordHash             String     @map("password_hash")
   role                     UserRole   @default(MEMBER)
+  isMember                 Boolean    @default(false) @map("is_member")
   isVolunteer              Boolean    @default(false) @map("is_volunteer")
   phone                    String?
   studentId                String?    @unique @map("student_id")

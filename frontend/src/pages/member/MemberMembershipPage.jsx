@@ -37,6 +37,19 @@ export default function MemberMembershipPage() {
 
   const isExpiringSoon = false; // Add real logic if needed
 
+  const handleRequest = async (planName) => {
+    try {
+      setLoading(true);
+      await api('/memberships/request', { method: 'POST', body: { planName } });
+      await refreshUser();
+      addToast('Request Sent', 'Your membership request has been sent for approval.', 'success');
+    } catch (err) {
+      addToast('Request Failed', err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handlePay = async () => {
     try {
       setLoading(true);
@@ -75,7 +88,37 @@ export default function MemberMembershipPage() {
           </div>
         )}
 
-        <div className="membership-grid">
+        {!user?.isMember && status === 'NONE' ? (
+          <div className="plans-section">
+            <h2>Select a Membership Plan</h2>
+            <div className="plans-grid">
+              {[
+                { name: 'Silver', price: '₹4000', features: ['5% Ticket Discounts', '2% Merchandise Discounts', '20 days Renewal Reminder'] },
+                { name: 'Gold', price: '₹8000', features: ['8% Ticket Discounts', '5% Merchandise Discounts', '10 days Renewal Reminder'] },
+                { name: 'Platinum', price: '₹12000', features: ['15% Ticket Discounts', '10% Merchandise Discounts', '5 days Renewal Reminder'] }
+              ].map(plan => (
+                <div key={plan.name} className="plan-card">
+                  <h3>{plan.name}</h3>
+                  <p className="plan-price">{plan.price}</p>
+                  <ul className="benefits-list" style={{ marginBottom: '24px', textAlign: 'left' }}>
+                    {plan.features.map((feature, i) => (
+                      <li key={i}>
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                  <button className="btn-primary w-100" onClick={() => handleRequest(plan.name)} disabled={loading}>
+                    {loading ? 'Requesting...' : 'Select Plan'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="membership-grid">
           {/* Membership Details Card */}
           <section className="dashboard-panel">
             <h2>Membership Details</h2>
@@ -141,6 +184,7 @@ export default function MemberMembershipPage() {
             </ul>
           </section>
         </div>
+        )}
       </div>
 
       <style>{`
@@ -215,6 +259,46 @@ export default function MemberMembershipPage() {
           grid-template-columns: 1fr 1fr;
           gap: 24px;
           align-items: start;
+        }
+
+        .plans-section {
+          margin-top: 32px;
+        }
+
+        .plans-section h2 {
+          font-family: 'Fraunces', Georgia, serif;
+          color: #1b4332;
+          margin-bottom: 24px;
+          text-align: center;
+        }
+
+        .plans-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 24px;
+        }
+
+        .plan-card {
+          background: #fff;
+          border-radius: 16px;
+          padding: 32px;
+          box-shadow: 0 4px 12px rgba(20, 53, 40, 0.04);
+          border: 1px solid rgba(45, 106, 79, 0.1);
+          text-align: center;
+        }
+
+        .plan-card h3 {
+          font-family: 'Fraunces', Georgia, serif;
+          font-size: 1.5rem;
+          color: #1b4332;
+          margin-bottom: 16px;
+        }
+
+        .plan-price {
+          font-size: 2rem;
+          color: #2d6a4f;
+          font-weight: 700;
+          margin-bottom: 24px;
         }
 
         @media (max-width: 900px) {

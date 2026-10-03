@@ -119,6 +119,9 @@ router.get('/memberships/stats', requireAuth, admin, asyncHandler(async (req, re
 router.post('/memberships/:membershipId/suspend', requireAuth, admin, asyncHandler(async (req, res) => {
   sendData(res, await memberships.suspend(req.params.membershipId), 'Membership suspended');
 }));
+router.post('/memberships/request', requireAuth, asyncHandler(async (req, res) => {
+  sendData(res, await memberships.request(req.user.id, req.body.planName), 'Membership requested');
+}));
 router.post('/members/:memberId/approve', requireAuth, admin, asyncHandler(async (req, res) => {
   sendData(res, await memberships.approve(req.params.memberId, req.body.planName), 'Member approved');
 }));

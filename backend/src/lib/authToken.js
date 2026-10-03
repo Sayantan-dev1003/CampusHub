@@ -15,6 +15,7 @@ function publicUser(user, membership = undefined) {
     name: user.name,
     email: user.email,
     role: user.role,
+    isMember: user.isMember,
     isVolunteer: user.isVolunteer,
     phone: user.phone,
     studentId: user.studentId,

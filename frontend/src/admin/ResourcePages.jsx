@@ -10,12 +10,18 @@ function NewButton({ label, onClick }) {
 }
 
 export function MembersPage({ mode }) {
-  const { navigate } = useApp();
   const [term, setTerm] = useState('');
   const [search, setSearch] = useState('');
-  const path = mode === 'expiring'
-    ? '/members?role=MEMBER&membership=EXPIRING&limit=100'
-    : `/members?role=MEMBER&limit=100${search ? `&search=${encodeURIComponent(search)}` : ''}`;
+  const [filterPlan, setFilterPlan] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  let path = '/members?role=MEMBER&limit=100';
+  if (mode === 'expiring') path += '&membership=EXPIRING';
+  else if (filterStatus) path += `&membership=${filterStatus}`;
+  
+  if (search) path += `&search=${encodeURIComponent(search)}`;
+  if (filterPlan) path += `&plan=${encodeURIComponent(filterPlan)}`;
+
   const query = useApi(mode === 'new' ? null : path, mode !== 'new');
   if (mode === 'new') return <MemberForm />;
 
@@ -37,40 +43,68 @@ export function MembersPage({ mode }) {
       kicker="Members"
       title={mode === 'expiring' ? 'Expiring soon' : 'All members'}
       lede={mode === 'expiring' ? 'Active memberships that end within 30 days.' : 'Everyone with a CampusHub account.'}
-      action={mode === 'expiring' ? null : <NewButton label="Add member" onClick={() => navigate('admin', { section: 'members', id: 'new' })} />}
+      action={null}
     >
       {mode !== 'expiring' && (
-        <form className="desk-toolbar" onSubmit={(event) => { event.preventDefault(); setSearch(term.trim()); }}>
-          <input value={term} onChange={(event) => setTerm(event.target.value)} placeholder="Search name, email, or student ID" />
-          <button className="desk-primary" type="submit">Search</button>
-        </form>
+        <div className="desk-toolbar" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <form style={{ display: 'flex', gap: '0.5rem', flex: 1, minWidth: '250px' }} onSubmit={(event) => { event.preventDefault(); setSearch(term.trim()); }}>
+            <input value={term} onChange={(event) => setTerm(event.target.value)} placeholder="Search name, email, or student ID" style={{ flex: 1 }} />
+            <button className="desk-primary" type="submit">Search</button>
+          </form>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <select value={filterPlan} onChange={(e) => setFilterPlan(e.target.value)} style={{ padding: '8px 12px', borderRadius: '10px', border: '1px solid #d3e6da', width: 'auto', minWidth: '0' }}>
+              <option value="">All Plans</option>
+              <option value="Silver">Silver</option>
+              <option value="Gold">Gold</option>
+              <option value="Platinum">Platinum</option>
+            </select>
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ padding: '8px 12px', borderRadius: '10px', border: '1px solid #d3e6da', width: 'auto', minWidth: '0' }}>
+              <option value="">All Statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="PENDING">Pending (Payment)</option>
+              <option value="AWAITING_APPROVAL">Needs Approval</option>
+              <option value="EXPIRED">Expired</option>
+              <option value="NONE">No Plan</option>
+            </select>
+          </div>
+        </div>
       )}
       <LoadState loading={query.loading} error={query.error}>
-        <DataTable
-          empty={mode === 'expiring' ? 'No memberships expire in the next 30 days.' : 'No members yet.'}
-          rows={query.data || []}
-          columns={[
-            { key: 'name', label: 'Name' },
-            { key: 'email', label: 'Email' },
-            { key: 'studentId', label: 'Student ID', render: (row) => row.studentId || '—' },
-            { key: 'role', label: 'Role' },
-            { key: 'plan', label: 'Plan', render: (row) => row.membership?.planName || '—' },
-            { key: 'status', label: 'Membership', render: (row) => row.membership?.status === 'AWAITING_APPROVAL' ? '-' : (row.membership?.status || 'None') },
-            { key: 'end', label: 'Ends', render: (row) => when(row.membership?.endDate) },
-            { 
-              key: 'approve', 
-              label: 'Actions', 
-              render: (row) => row.membership?.status === 'AWAITING_APPROVAL' ? (
-                <button 
-                  className="desk-primary" 
-                  onClick={() => approveMember(row.id, row.membership?.planName || 'Silver')}
-                >
-                  Approve
-                </button>
-              ) : null
-            }
-          ]}
-        />
+        <div style={{ fontSize: '0.85rem' }}>
+          <DataTable
+            empty={mode === 'expiring' ? 'No memberships expire in the next 30 days.' : 'No members yet.'}
+            rows={query.data || []}
+            columns={[
+              { key: 'name', label: 'Name' },
+              { key: 'email', label: 'Email' },
+              { key: 'studentId', label: 'Student ID', render: (row) => row.studentId || '—' },
+              { key: 'role', label: 'Role' },
+              { key: 'plan', label: 'Plan', render: (row) => row.membership?.planName || '—' },
+              { key: 'status', label: 'Membership', render: (row) => row.membership?.status === 'AWAITING_APPROVAL' ? '-' : (row.membership?.status || 'None') },
+              { key: 'start', label: 'Start', render: (row) => when(row.membership?.startDate) },
+              { key: 'end', label: 'End', render: (row) => when(row.membership?.endDate) },
+              { 
+                key: 'approve', 
+                label: 'Actions', 
+                render: (row) => {
+                  if (!row.membership) return '—';
+                  if (row.membership.status === 'AWAITING_APPROVAL') {
+                    return (
+                      <button 
+                        className="desk-primary" 
+                        style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                        onClick={() => approveMember(row.id, row.membership?.planName || 'Silver')}
+                      >
+                        Approve
+                      </button>
+                    );
+                  }
+                  return <span style={{ color: '#059669', fontWeight: 600 }}>Approved</span>;
+                }
+              }
+            ]}
+          />
+        </div>
       </LoadState>
     </PageFrame>
   );

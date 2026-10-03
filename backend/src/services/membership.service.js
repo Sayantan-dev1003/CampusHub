@@ -194,6 +194,9 @@ module.exports = {
       });
 
       // 3. Update Membership
+      const d = new Date();
+      d.setMonth(d.getMonth() + existing.plan.durationMonths);
+      
       const membership = await tx.membership.update({
         where: { id: existing.id },
         data: { 
@@ -201,7 +204,7 @@ module.exports = {
           paymentStatus: 'PAID',
           paymentId: payment.id,
           startDate: new Date(),
-          endDate: new Date(Date.now() + existing.plan.durationMonths * 30 * 24 * 60 * 60 * 1000)
+          endDate: d
         },
         include: { plan: true },
       });

@@ -38,6 +38,18 @@ async function listMembers(query) {
   } else if (query.membership === 'EXPIRING') {
     const soon = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     where.memberships = { some: { status: 'ACTIVE', endDate: { gte: new Date(), lte: soon } } };
+  } else if (query.membership === 'AWAITING_APPROVAL') {
+    where.memberships = { some: { status: 'AWAITING_APPROVAL' } };
+  } else if (query.membership === 'PENDING') {
+    where.memberships = { some: { status: 'PENDING' } };
+  }
+
+  if (query.plan) {
+    if (where.memberships?.some) {
+      where.memberships.some.plan = { name: query.plan };
+    } else {
+      where.memberships = { some: { plan: { name: query.plan } } };
+    }
   }
 
   const [total, rows] = await prisma.$transaction([

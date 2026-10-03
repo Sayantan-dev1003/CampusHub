@@ -68,20 +68,6 @@ export default function DashboardPage({ currency }) {
         ))}
       </section>
 
-      <section className="ledger-strip">
-        <article>
-          <span>Ledger income</span>
-          <strong>{money(data.revenue, currency)}</strong>
-        </article>
-        <article>
-          <span>Pending expenses</span>
-          <strong>{count(data.pendingExpenses)}</strong>
-        </article>
-        <article>
-          <span>Open orders</span>
-          <strong>{count(data.openOrders)}</strong>
-        </article>
-      </section>
 
       <section className="action-row" aria-label="Quick actions">
         {ACTIONS.map((action) => {
@@ -96,85 +82,87 @@ export default function DashboardPage({ currency }) {
       </section>
 
       <div className="desk-split">
-        <section className="desk-panel">
-          <div className="panel-head">
-            <h2>Upcoming events</h2>
-            <button type="button" onClick={() => go('events')}>All events</button>
-          </div>
-          {(data.upcomingEventList || []).length === 0 && <p className="desk-empty">No published events ahead.</p>}
-          <ul className="stack-list">
-            {(data.upcomingEventList || []).map((event) => (
-              <li key={event.id}>
-                <div>
-                  <strong>{event.title}</strong>
-                  <span>{when(event.startsAt)}{event.venue ? ` · ${event.venue}` : ''}</span>
-                  <span>{count(event.ticketsSold)} / {count(event.capacity)} tickets sold · {count(event.checkedIn)} checked in</span>
-                </div>
-                <button type="button" className="ghost-btn" onClick={() => go('events', event.id)}>View event</button>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="desk-panel">
-          <div className="panel-head">
-            <h2>Recent announcements</h2>
-            <button type="button" onClick={() => go('announcements')}>All</button>
-          </div>
-          {(data.announcements || []).length === 0 && <p className="desk-empty">Nothing published.</p>}
-          <ul className="stack-list">
-            {(data.announcements || []).map((item) => (
-              <li key={item.id}>
-                <div>
-                  <strong>{item.title}</strong>
-                  <span>{ago(item.publishedAt)}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
-
-      <div className="desk-split">
-        <section className="desk-panel">
-          <div className="panel-head">
-            <h2>Recent orders</h2>
-            <button type="button" onClick={() => go('orders')}>All orders</button>
-          </div>
-          {(data.recentOrders || []).length === 0 && <p className="desk-empty">No orders yet.</p>}
-          <ul className="stack-list">
-            {(data.recentOrders || []).map((order) => {
-              const summary = (order.items || []).map((item) => `${item.name} x${item.quantity}`).join(', ') || 'Order';
-              return (
-                <li key={order.id}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <section className="desk-panel">
+            <div className="panel-head">
+              <h2>Upcoming events</h2>
+              <button type="button" onClick={() => go('events')}>All events</button>
+            </div>
+            {(data.upcomingEventList || []).length === 0 && <p className="desk-empty">No published events ahead.</p>}
+            <ul className="stack-list">
+              {(data.upcomingEventList || []).map((event) => (
+                <li key={event.id}>
                   <div>
-                    <strong>{shortId(order.id)} · {summary}</strong>
-                    <span>{money(order.totalAmount, currency)} · {titleCase(order.orderStatus)}</span>
+                    <strong>{event.title}</strong>
+                    <span>{when(event.startsAt)}{event.venue ? ` · ${event.venue}` : ''}</span>
+                    <span>{count(event.ticketsSold)} / {count(event.capacity)} tickets sold · {count(event.checkedIn)} checked in</span>
+                  </div>
+                  <button type="button" className="ghost-btn" onClick={() => go('events', event.id)}>View event</button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <section className="desk-panel">
+            <div className="panel-head">
+              <h2>Recent announcements</h2>
+              <button type="button" onClick={() => go('announcements')}>All</button>
+            </div>
+            {(data.announcements || []).length === 0 && <p className="desk-empty">Nothing published.</p>}
+            <ul className="stack-list">
+              {(data.announcements || []).map((item) => (
+                <li key={item.id}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <span>{ago(item.publishedAt)}</span>
                   </div>
                 </li>
-              );
-            })}
-          </ul>
-        </section>
+              ))}
+            </ul>
+          </section>
 
-        <section className="desk-panel">
-          <div className="panel-head">
-            <h2>Volunteer activity</h2>
-            <button type="button" onClick={() => go('initiatives')}>Initiatives</button>
-          </div>
-          {(data.initiatives || []).length === 0 && <p className="desk-empty">No open initiatives.</p>}
-          <ul className="stack-list">
-            {(data.initiatives || []).map((item) => (
-              <li key={item.id}>
-                <div className="grow">
-                  <strong>{item.name}</strong>
-                  <div className="meter" aria-hidden="true"><span style={{ width: `${item.percent}%` }} /></div>
-                  <span>{item.percent}% complete · {item.completed} completed · {item.inProgress} in progress · {item.pending} pending</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
+          <section className="desk-panel">
+            <div className="panel-head">
+              <h2>Volunteer activity</h2>
+              <button type="button" onClick={() => go('initiatives')}>Initiatives</button>
+            </div>
+            {(data.initiatives || []).length === 0 && <p className="desk-empty">No open initiatives.</p>}
+            <ul className="stack-list">
+              {(data.initiatives || []).map((item) => (
+                <li key={item.id}>
+                  <div className="grow">
+                    <strong>{item.name}</strong>
+                    <div className="meter" aria-hidden="true"><span style={{ width: `${item.percent}%` }} /></div>
+                    <span>{item.percent}% complete · {item.completed} completed · {item.inProgress} in progress · {item.pending} pending</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="desk-panel">
+            <div className="panel-head">
+              <h2>Recent orders</h2>
+              <button type="button" onClick={() => go('orders')}>All orders</button>
+            </div>
+            {(data.recentOrders || []).length === 0 && <p className="desk-empty">No orders yet.</p>}
+            <ul className="stack-list">
+              {(data.recentOrders || []).map((order) => {
+                const summary = (order.items || []).map((item) => `${item.name} x${item.quantity}`).join(', ') || 'Order';
+                return (
+                  <li key={order.id}>
+                    <div>
+                      <strong>{shortId(order.id)} · {summary}</strong>
+                      <span>{money(order.totalAmount, currency)} · {titleCase(order.orderStatus)}</span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        </div>
       </div>
 
     </div>

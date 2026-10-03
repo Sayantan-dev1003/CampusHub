@@ -74,6 +74,8 @@ async function memberDashboard(user) {
 
 async function adminDashboard() {
   const now = new Date();
+  
+  // Batch 1: Simple Counts
   const [
     totalMembers,
     activeMemberships,
@@ -81,15 +83,8 @@ async function adminDashboard() {
     ticketsSold,
     openOrders,
     pendingOrders,
-    variants,
     openTasks,
     pendingExpenses,
-    revenue,
-    membership,
-    upcomingRows,
-    recentOrderRows,
-    initiativeRows,
-    announcementRows,
   ] = await Promise.all([
     prisma.user.count({ where: { role: 'MEMBER' } }),
     prisma.membership.count({ where: { status: 'ACTIVE', endDate: { gte: now } } }),
@@ -97,9 +92,18 @@ async function adminDashboard() {
     prisma.ticket.count({ where: { status: { in: ['PAID', 'USED'] } } }),
     prisma.order.count({ where: { orderStatus: { in: ['PAID', 'PROCESSING', 'READY'] } } }),
     prisma.order.count({ where: { orderStatus: { in: ['PENDING', 'PAID', 'PROCESSING', 'READY'] } } }),
-    prisma.productVariant.findMany({ select: { stockQuantity: true, lowStockThreshold: true } }),
     prisma.task.count({ where: { status: { in: ['TODO', 'IN_PROGRESS'] } } }),
     prisma.expense.count({ where: { status: 'PENDING' } }),
+  ]);
+
+  // Batch 2: Stats and Arrays
+  const [
+    variants,
+    revenue,
+    membership,
+    upcomingRows,
+  ] = await Promise.all([
+    prisma.productVariant.findMany({ select: { stockQuantity: true, lowStockThreshold: true } }),
     prisma.transaction.aggregate({ where: { status: 'POSTED', type: 'INCOME' }, _sum: { amount: true } }),
     memberships.stats(),
     prisma.event.findMany({
@@ -107,6 +111,14 @@ async function adminDashboard() {
       orderBy: { startsAt: 'asc' },
       take: 5,
     }),
+  ]);
+
+  // Batch 3: Complex Includes
+  const [
+    recentOrderRows,
+    initiativeRows,
+    announcementRows,
+  ] = await Promise.all([
     prisma.order.findMany({
       orderBy: { createdAt: 'desc' },
       take: 5,
@@ -125,12 +137,11 @@ async function adminDashboard() {
     }),
   ]);
 
-  const upcomingEventList = await Promise.all(upcomingRows.map(async (event) => {
-    const [sold, checkedIn] = await Promise.all([
-      prisma.ticket.count({ where: { eventId: event.id, status: { in: ['PAID', 'USED'] } } }),
-      prisma.attendance.count({ where: { eventId: event.id } }),
-    ]);
-    return {
+  const upcomingEventList = [];
+  for (const event of upcomingRows) {
+    const sold = await prisma.ticket.count({ where: { eventId: event.id, status: { in: ['PAID', 'USED'] } } });
+    const checkedIn = await prisma.attendance.count({ where: { eventId: event.id } });
+    upcomingEventList.push({
       id: event.id,
       title: event.title,
       startsAt: event.startsAt,
@@ -138,8 +149,8 @@ async function adminDashboard() {
       capacity: event.capacity,
       ticketsSold: sold,
       checkedIn,
-    };
-  }));
+    });
+  }
 
   return {
     totalMembers,

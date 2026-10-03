@@ -65,26 +65,30 @@ async function getMembership(memberId) {
 
 async function stats() {
   const now = new Date();
-  const plans = await prisma.membershipPlan.findMany();
-  const activeRows = await prisma.membership.findMany({
-    where: { status: 'ACTIVE' },
-    include: { plan: true },
-  });
-  const expiringSoon = activeRows.filter((row) => {
-    if (!row.endDate) return false;
-    const windowMs = row.plan.renewalReminderDays * 24 * 60 * 60 * 1000;
-    return row.endDate.getTime() - now.getTime() <= windowMs && row.endDate >= now;
-  }).length;
-  const [expired, unpaid] = await Promise.all([
+  const [planCount, active, expired, unpaid] = await Promise.all([
+    prisma.membershipPlan.count(),
+    prisma.membership.count({ where: { status: 'ACTIVE' } }),
     prisma.membership.count({ where: { status: 'EXPIRED' } }),
     prisma.membership.count({ where: { paymentStatus: { in: ['PENDING', 'FAILED'] }, status: { not: 'ACTIVE' } } }),
   ]);
+  
+  // For expiring soon, we fetch active rows but only necessary fields to keep it fast
+  const activeRows = await prisma.membership.findMany({
+    where: { status: 'ACTIVE', endDate: { gte: now } },
+    include: { plan: true },
+  });
+  const expiringSoon = activeRows.filter((row) => {
+    if (!row.endDate || !row.plan) return false;
+    const windowMs = row.plan.renewalReminderDays * 24 * 60 * 60 * 1000;
+    return row.endDate.getTime() - now.getTime() <= windowMs;
+  }).length;
+
   return {
-    active: activeRows.length,
+    active,
     expiringSoon,
     expired,
     unpaid,
-    planCount: plans.length,
+    planCount,
   };
 }
 

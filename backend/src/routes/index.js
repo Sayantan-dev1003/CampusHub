@@ -81,6 +81,10 @@ router.get('/members', requireAuth, requireRoles('ADMIN', 'TREASURER'), asyncHan
   const result = await members.listMembers(req.query);
   sendList(res, result.data, result.meta);
 }));
+router.post('/members', requireAuth, admin, validateBody(schemas.registerSchema), asyncHandler(async (req, res) => {
+  const result = await auth.register({ ...req.body, role: 'MEMBER' });
+  sendData(res, result.user, 'Member created', 201);
+}));
 router.get('/members/:memberId', requireAuth, requireSelfOrStaff('memberId'), asyncHandler(async (req, res) => {
   sendData(res, await members.getMember(req.params.memberId));
 }));
@@ -274,7 +278,7 @@ router.post('/finance/expenses', requireAuth, requireExpenseSubmit, maybeSingle(
   }, receiptUrl), 'Expense submitted', 201);
 }));
 router.get('/finance/expenses', requireAuth, asyncHandler(async (req, res) => {
-  if (req.user.role !== 'TREASURER' && !req.user.isVolunteer) {
+  if (req.user.role !== 'TREASURER' && req.user.role !== 'ADMIN' && !req.user.isVolunteer) {
     throw new ApiError(403, 'Forbidden', 'FORBIDDEN');
   }
   const result = await finance.listExpenses(req.user, req.query);
@@ -292,11 +296,11 @@ router.post('/finance/expenses/:expenseId/reimburse', requireAuth, treasurer, as
 router.post('/finance/income', requireAuth, treasurer, validateBody(schemas.incomeSchema), asyncHandler(async (req, res) => {
   sendData(res, await finance.recordIncome(req.user.id, req.body), 'Income recorded', 201);
 }));
-router.get('/finance/transactions', requireAuth, treasurer, asyncHandler(async (req, res) => {
+router.get('/finance/transactions', requireAuth, requireRoles('ADMIN', 'TREASURER'), asyncHandler(async (req, res) => {
   const result = await finance.listTransactions(req.query);
   sendList(res, result.data, result.meta);
 }));
-router.get('/finance/summary', requireAuth, treasurer, asyncHandler(async (req, res) => {
+router.get('/finance/summary', requireAuth, requireRoles('ADMIN', 'TREASURER'), asyncHandler(async (req, res) => {
   sendData(res, await finance.summary());
 }));
 

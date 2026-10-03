@@ -34,6 +34,9 @@ async function listMembers(query) {
     where.NOT = { memberships: { some: { status: 'ACTIVE', endDate: { gte: new Date() } } } };
   } else if (query.membership === 'NONE') {
     where.memberships = { none: {} };
+  } else if (query.membership === 'EXPIRING') {
+    const soon = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    where.memberships = { some: { status: 'ACTIVE', endDate: { gte: new Date(), lte: soon } } };
   }
 
   const [total, rows] = await prisma.$transaction([

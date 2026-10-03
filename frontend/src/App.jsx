@@ -14,6 +14,7 @@ import StorePage from './pages/StorePage';
 import ProductDetailsPage from './pages/ProductDetailsPage';
 import AboutPage from './pages/AboutPage';
 import AuthPage from './pages/AuthPage';
+import AdminApp from './admin/AdminApp';
 
 import './styles/theme.css';
 
@@ -38,20 +39,23 @@ function AppContent() {
         return <AuthPage initialMode="login" />;
       case 'register':
         return <AuthPage initialMode="register" />;
+      case 'admin':
+        return <AdminApp />;
       default:
         return <HomePage />;
     }
   };
 
   const isAuthPage = currentRoute.page === 'login' || currentRoute.page === 'register';
+  const isAdminPage = currentRoute.page === 'admin';
 
   return (
     <div className={`app-layout${isAuthPage ? ' auth-layout' : ''}`}>
-      {!isAuthPage && <Navbar />}
+      {!isAuthPage && !isAdminPage && <Navbar />}
       <main className={`app-main-content ${isAuthPage ? 'auth-shell' : ''}`}>
         {renderCurrentPage()}
       </main>
-      {!isAuthPage && <Footer />}
+      {!isAuthPage && !isAdminPage && <Footer />}
 
       {/* Global Drawers & Modals */}
       <CartDrawer />

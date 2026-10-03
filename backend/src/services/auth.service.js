@@ -17,6 +17,7 @@ function membershipSummary(membership) {
   return {
     id: membership.id,
     status: membership.status,
+    startDate: membership.startDate,
     endDate: membership.endDate,
     planName: membership.plan.name,
     paymentStatus: membership.paymentStatus,
@@ -26,9 +27,9 @@ function membershipSummary(membership) {
 
 async function currentMembership(userId) {
   return prisma.membership.findFirst({
-    where: { userId, status: 'ACTIVE', endDate: { gte: new Date() } },
+    where: { userId },
     include: { plan: true },
-    orderBy: { endDate: 'desc' },
+    orderBy: { createdAt: 'desc' },
   });
 }
 
@@ -46,14 +47,36 @@ async function register(input) {
       passwordHash: await bcrypt.hash(input.password, 10),
       phone: input.phone || null,
       studentId: input.studentId || null,
+      year: input.year || null,
+      branch: input.branch || null,
       role: input.role || 'MEMBER',
       isVolunteer: input.role === 'MEMBER' ? Boolean(input.isVolunteer) : false,
       notificationPreferences: defaults,
     },
   });
+
+  if (input.planName) {
+    let plan = await prisma.membershipPlan.findFirst({ where: { name: input.planName } });
+    if (!plan) {
+      plan = await prisma.membershipPlan.findFirst();
+    }
+    if (plan) {
+      await prisma.membership.create({
+        data: {
+          userId: user.id,
+          planId: plan.id,
+          duesAmount: plan.fee,
+          paymentStatus: 'PENDING',
+          status: 'AWAITING_APPROVAL',
+        }
+      });
+    }
+  }
+
+  const membership = await currentMembership(user.id);
   return {
     token: signToken(user),
-    user: publicUser(user, null),
+    user: publicUser(user, membershipSummary(membership)),
   };
 }
 

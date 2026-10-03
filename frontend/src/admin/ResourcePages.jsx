@@ -14,10 +14,23 @@ export function MembersPage({ mode }) {
   const [term, setTerm] = useState('');
   const [search, setSearch] = useState('');
   const path = mode === 'expiring'
-    ? '/members?membership=EXPIRING&limit=100'
-    : `/members?limit=100${search ? `&search=${encodeURIComponent(search)}` : ''}`;
+    ? '/members?role=MEMBER&membership=EXPIRING&limit=100'
+    : `/members?role=MEMBER&limit=100${search ? `&search=${encodeURIComponent(search)}` : ''}`;
   const query = useApi(mode === 'new' ? null : path, mode !== 'new');
   if (mode === 'new') return <MemberForm />;
+
+  const approveMember = async (memberId, planName) => {
+    try {
+      await api(`/members/${memberId}/approve`, {
+        method: 'POST',
+        body: { planName },
+      });
+      // Need a way to refresh, query.reload() works if I add it
+      window.location.reload(); 
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   return (
     <PageFrame
@@ -42,8 +55,20 @@ export function MembersPage({ mode }) {
             { key: 'studentId', label: 'Student ID', render: (row) => row.studentId || '—' },
             { key: 'role', label: 'Role' },
             { key: 'plan', label: 'Plan', render: (row) => row.membership?.planName || '—' },
-            { key: 'status', label: 'Membership', render: (row) => row.membership?.status || 'None' },
+            { key: 'status', label: 'Membership', render: (row) => row.membership?.status === 'AWAITING_APPROVAL' ? '-' : (row.membership?.status || 'None') },
             { key: 'end', label: 'Ends', render: (row) => when(row.membership?.endDate) },
+            { 
+              key: 'approve', 
+              label: 'Actions', 
+              render: (row) => row.membership?.status === 'AWAITING_APPROVAL' ? (
+                <button 
+                  className="desk-primary" 
+                  onClick={() => approveMember(row.id, row.membership?.planName || 'Silver')}
+                >
+                  Approve
+                </button>
+              ) : null
+            }
           ]}
         />
       </LoadState>

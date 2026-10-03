@@ -246,14 +246,26 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="benefits-grid">
-            {MEMBERSHIP_BENEFITS.map((ben) => (
-              <div key={ben.id} className="benefit-card glass-card">
-                <div className="benefit-icon-box">
-                  <Sparkles size={20} className="text-sage" />
-                </div>
-                <h3 className="benefit-title">{ben.title}</h3>
-                <p className="benefit-desc">{ben.description}</p>
+          <div className="plans-grid">
+            {[
+              { name: 'Silver', fee: 4000, ticketDesc: '5% Ticket Discounts', merchDesc: '2% Merchandise Discounts', reminder: '20 days Renewal Reminder' },
+              { name: 'Gold', fee: 8000, ticketDesc: '8% Ticket Discounts', merchDesc: '5% Merchandise Discounts', reminder: '10 days Renewal Reminder' },
+              { name: 'Platinum', fee: 12000, ticketDesc: '15% Ticket Discounts', merchDesc: '10% Merchandise Discounts', reminder: '5 days Renewal Reminder' },
+            ].map((plan) => (
+              <div key={plan.name} className="plan-card glass-card">
+                <h3 className="plan-title">{plan.name}</h3>
+                <div className="plan-price">₹{plan.fee}</div>
+                <ul className="plan-features">
+                  <li><CheckCircle2 size={16} /> {plan.ticketDesc}</li>
+                  <li><CheckCircle2 size={16} /> {plan.merchDesc}</li>
+                  <li><CheckCircle2 size={16} /> {plan.reminder}</li>
+                </ul>
+                <button 
+                  className="btn btn-primary btn-plan"
+                  onClick={() => navigate('register', { plan: plan.name })}
+                >
+                  Select {plan.name}
+                </button>
               </div>
             ))}
           </div>
@@ -748,40 +760,61 @@ export default function HomePage() {
           text-align: center;
         }
 
-        .benefits-grid {
+        .plans-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 24px;
           margin-bottom: 40px;
         }
 
-        .benefit-card {
-          padding: 24px;
+        .plan-card {
+          padding: 32px;
           background: #ffffff;
           border-radius: var(--radius-md);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
         }
 
-        .benefit-icon-box {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          background: var(--color-pastel-soft);
+        .plan-title {
+          font-size: 1.5rem;
+          color: var(--color-primary-dark);
+          margin-bottom: 16px;
+        }
+        
+        .plan-price {
+          font-size: 2.5rem;
+          font-weight: 800;
+          color: var(--color-primary);
+          margin-bottom: 24px;
+        }
+
+        .plan-features {
+          list-style: none;
+          padding: 0;
+          margin: 0 0 32px 0;
+          width: 100%;
+          text-align: left;
+        }
+
+        .plan-features li {
+          font-size: 0.95rem;
+          color: var(--text-secondary);
+          margin-bottom: 12px;
           display: flex;
           align-items: center;
-          justify-content: center;
-          margin-bottom: 14px;
+          gap: 10px;
         }
 
-        .benefit-title {
-          font-size: 1.1rem;
-          color: var(--color-primary-dark);
-          margin-bottom: 8px;
+        .plan-features li svg {
+          color: #52b788;
+          flex-shrink: 0;
         }
 
-        .benefit-desc {
-          font-size: 0.88rem;
-          color: var(--text-secondary);
-          line-height: 1.5;
+        .btn-plan {
+          width: 100%;
+          margin-top: auto;
         }
 
         .membership-cta-banner {

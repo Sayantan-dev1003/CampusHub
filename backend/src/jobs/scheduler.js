@@ -75,8 +75,7 @@ async function expireMemberships() {
   const now = new Date();
   for (const membership of rows) {
     if (!membership.endDate) continue;
-    const graceEnd = addDays(membership.endDate, membership.plan.gracePeriodDays || 0);
-    if (graceEnd < now) {
+    if (membership.endDate < now) {
       await prisma.membership.update({ where: { id: membership.id }, data: { status: 'EXPIRED' } });
     }
   }

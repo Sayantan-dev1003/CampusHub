@@ -5,9 +5,12 @@ const registerSchema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(8).max(72),
   studentId: z.string().trim().min(1).max(40).optional(),
+  year: z.string().trim().max(10).optional(),
+  branch: z.string().trim().max(100).optional(),
   phone: z.string().trim().max(20).optional(),
   role: z.enum(['MEMBER', 'ADMIN', 'TREASURER']).default('MEMBER'),
   isVolunteer: z.boolean().optional(),
+  planName: z.string().trim().optional(),
 });
 
 const loginSchema = z.object({
@@ -26,6 +29,8 @@ const profileSchema = z.object({
   email: z.string().trim().email().optional(),
   phone: z.string().trim().max(20).nullable().optional(),
   studentId: z.string().trim().max(40).nullable().optional(),
+  year: z.string().trim().max(10).nullable().optional(),
+  branch: z.string().trim().max(100).nullable().optional(),
   notificationPreferences: z.record(z.boolean()).optional(),
 });
 
@@ -33,6 +38,8 @@ const memberPatchSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   phone: z.string().trim().max(20).nullable().optional(),
   studentId: z.string().trim().max(40).nullable().optional(),
+  year: z.string().trim().max(10).nullable().optional(),
+  branch: z.string().trim().max(100).nullable().optional(),
 });
 
 const statusSchema = z.object({
@@ -51,7 +58,6 @@ const planSchema = z.object({
   ticketDiscountPercent: z.number().min(0).max(100).optional(),
   merchDiscountPercent: z.number().min(0).max(100).optional(),
   renewalReminderDays: z.number().int().nonnegative(),
-  gracePeriodDays: z.number().int().nonnegative().optional(),
   isActive: z.boolean().optional(),
 });
 

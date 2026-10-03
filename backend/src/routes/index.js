@@ -119,6 +119,12 @@ router.get('/memberships/stats', requireAuth, admin, asyncHandler(async (req, re
 router.post('/memberships/:membershipId/suspend', requireAuth, admin, asyncHandler(async (req, res) => {
   sendData(res, await memberships.suspend(req.params.membershipId), 'Membership suspended');
 }));
+router.post('/members/:memberId/approve', requireAuth, admin, asyncHandler(async (req, res) => {
+  sendData(res, await memberships.approve(req.params.memberId, req.body.planName), 'Member approved');
+}));
+router.post('/memberships/my/pay', requireAuth, asyncHandler(async (req, res) => {
+  sendData(res, await memberships.pay(req.user.id), 'Payment successful');
+}));
 
 router.get('/events', optionalAuth, asyncHandler(async (req, res) => {
   const result = await events.listEvents(req.user, req.query);

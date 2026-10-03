@@ -11,7 +11,6 @@ function serializePlan(plan) {
     ticketDiscountPercent: money(plan.ticketDiscountPercent),
     merchDiscountPercent: money(plan.merchDiscountPercent),
     renewalReminderDays: plan.renewalReminderDays,
-    gracePeriodDays: plan.gracePeriodDays,
     isActive: plan.isActive,
   };
 }
@@ -103,6 +102,53 @@ async function suspend(membershipId) {
   return serializeMembership(membership);
 }
 
+async function approve(memberId, planName = 'Silver') {
+  // Find or create the plan based on name
+  let plan = await prisma.membershipPlan.findFirst({ where: { name: planName } });
+  if (!plan) {
+    plan = await prisma.membershipPlan.create({
+      data: {
+        name: planName,
+        fee: 500,
+        durationMonths: 12,
+        ticketDiscountPercent: 10,
+        merchDiscountPercent: 5,
+        renewalReminderDays: 30,
+        isActive: true,
+      }
+    });
+  }
+
+  const start = new Date();
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + plan.durationMonths);
+
+  const existing = await prisma.membership.findFirst({ where: { userId: memberId } });
+  
+  if (existing) {
+    const membership = await prisma.membership.update({
+      where: { id: existing.id },
+      data: { status: 'PENDING', paymentStatus: 'PENDING', planId: plan.id, startDate: start, endDate: end },
+      include: { plan: true },
+    });
+    return serializeMembership(membership);
+  } else {
+    const membership = await prisma.membership.create({
+      data: {
+        userId: memberId,
+        planId: plan.id,
+        duesAmount: plan.fee,
+        paymentStatus: 'PENDING',
+        status: 'PENDING',
+        startDate: start,
+        endDate: end,
+      },
+      include: { plan: true },
+    });
+    return serializeMembership(membership);
+  }
+}
+
 module.exports = {
   serializePlan,
   serializeMembership,
@@ -112,4 +158,55 @@ module.exports = {
   getMembership,
   stats,
   suspend,
+  approve,
+  pay: async (memberId) => {
+    const existing = await prisma.membership.findFirst({ where: { userId: memberId }, include: { plan: true } });
+    if (!existing) throw new ApiError(404, 'Membership not found', 'NOT_FOUND');
+    
+    return prisma.$transaction(async (tx) => {
+      // 1. Create Payment
+      const payment = await tx.payment.create({
+        data: {
+          userId: memberId,
+          purpose: 'MEMBERSHIP',
+          amount: existing.duesAmount,
+          currency: 'INR',
+          status: 'PAID',
+          referenceType: 'MEMBERSHIP',
+          referenceId: existing.id,
+        }
+      });
+      
+      // 2. Create Transaction
+      await tx.transaction.create({
+        data: {
+          userId: memberId,
+          paymentId: payment.id,
+          type: 'INCOME',
+          category: 'MEMBERSHIP',
+          referenceType: 'MEMBERSHIP',
+          referenceId: existing.id,
+          amount: existing.duesAmount,
+          currency: 'INR',
+          description: `Membership payment for ${existing.plan.name} plan`,
+          status: 'POSTED',
+        }
+      });
+
+      // 3. Update Membership
+      const membership = await tx.membership.update({
+        where: { id: existing.id },
+        data: { 
+          status: 'ACTIVE', 
+          paymentStatus: 'PAID',
+          paymentId: payment.id,
+          startDate: new Date(),
+          endDate: new Date(Date.now() + existing.plan.durationMonths * 30 * 24 * 60 * 60 * 1000)
+        },
+        include: { plan: true },
+      });
+      
+      return serializeMembership(membership);
+    });
+  }
 };

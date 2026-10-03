@@ -12,6 +12,8 @@ const emptySignup = {
   email: '',
   phone: '',
   studentId: '',
+  year: '',
+  branch: '',
   role: 'MEMBER',
   isVolunteer: false,
   password: '',
@@ -21,6 +23,13 @@ const emptySignup = {
 export default function AuthPage({ initialMode = 'login' }) {
   const { currentRoute, navigate, signIn, signUp, addToast } = useApp();
   const mode = currentRoute.page === 'register' || initialMode === 'register' ? 'register' : 'login';
+  
+  const hash = window.location.hash;
+  let urlPlan = '';
+  if (hash.includes('?')) {
+    const searchParams = new URLSearchParams(hash.split('?')[1]);
+    urlPlan = searchParams.get('plan') || '';
+  }
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -66,8 +75,11 @@ export default function AuthPage({ initialMode = 'login' }) {
         password: form.password,
         phone: form.phone.trim() || undefined,
         studentId: form.studentId.trim() || undefined,
+        year: form.year.trim() || undefined,
+        branch: form.branch.trim() || undefined,
         role: form.role,
         isVolunteer: form.role === 'MEMBER' ? form.isVolunteer : false,
+        planName: urlPlan || form.planName || 'Silver',
       });
     } catch (err) {
       setError(err.message || 'Could not create the account');
@@ -228,6 +240,46 @@ export default function AuthPage({ initialMode = 'login' }) {
                   />
                 </div>
               </div>
+
+              <div className="gate-row">
+                <div className="gate-field">
+                  <label htmlFor="signup-year">Year</label>
+                  <input
+                    id="signup-year"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="Enter year"
+                    value={form.year}
+                    onChange={(event) => setForm({ ...form, year: event.target.value })}
+                  />
+                </div>
+                <div className="gate-field">
+                  <label htmlFor="signup-branch">Branch</label>
+                  <input
+                    id="signup-branch"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="Enter branch"
+                    value={form.branch}
+                    onChange={(event) => setForm({ ...form, branch: event.target.value })}
+                  />
+                </div>
+              </div>
+
+              {!urlPlan && (
+                <div className="gate-field">
+                  <label htmlFor="signup-plan">Membership Plan</label>
+                  <select
+                    id="signup-plan"
+                    value={form.planName || 'Silver'}
+                    onChange={(event) => setForm({ ...form, planName: event.target.value })}
+                  >
+                    <option value="Silver">Silver (₹4000)</option>
+                    <option value="Gold">Gold (₹8000)</option>
+                    <option value="Platinum">Platinum (₹12000)</option>
+                  </select>
+                </div>
+              )}
 
               {form.role === 'MEMBER' && (
                 <label className="gate-check">

@@ -213,7 +213,6 @@ const spec = {
           ticketDiscountPercent: 10,
           merchDiscountPercent: 10,
           renewalReminderDays: 14,
-          gracePeriodDays: 7,
           isActive: true,
         }, ['name', 'fee', 'durationMonths', 'renewalReminderDays']),
       }),

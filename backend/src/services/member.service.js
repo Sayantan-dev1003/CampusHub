@@ -20,6 +20,7 @@ async function listMembers(query) {
   const { page, limit, skip } = pageParams(query);
   const where = {};
   if (query.status) where.status = query.status;
+  if (query.role) where.role = query.role;
   if (query.search) {
     where.OR = [
       { name: { contains: query.search, mode: 'insensitive' } },

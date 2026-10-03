@@ -47,7 +47,6 @@ async function main() {
         ticketDiscountPercent: 0,
         merchDiscountPercent: 10,
         renewalReminderDays: 30,
-        gracePeriodDays: 7,
         isActive: true,
       },
     });

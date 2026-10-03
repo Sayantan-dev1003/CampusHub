@@ -1,36 +1,53 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import MemberLayout from './MemberLayout';
+import { api } from '../../services/api';
 
 export default function MemberMembershipPage() {
-  const { user, addToast } = useApp();
+  const { user, addToast, refreshUser } = useApp();
+  const [loading, setLoading] = useState(false);
   
-  // Mock data for membership details (in real app, this would come from user object or API)
-  const [membershipDetails, setMembershipDetails] = useState({
-    status: user?.isMember !== false ? 'ACTIVE' : 'EXPIRED',
-    type: user?.membershipType || 'Annual',
-    started: 'Jan 01, 2026',
-    expires: user?.expiryDate || 'Dec 31, 2026',
-    duesPaid: '₹500.00',
-    benefits: [
-      'Event ticket discounts (up to 20%)',
-      'Merchandise store discounts (10%)',
-      'Early access to flagship events',
-      'Voting rights in general body meetings'
+  const m = user?.membership;
+  const status = m?.status || 'NONE';
+  const type = m?.planName || 'None';
+  
+  // Helper to format dates
+  const formatDate = (d) => d ? new Date(d).toLocaleDateString() : '—';
+  
+  const membershipDetails = {
+    status,
+    type,
+    started: formatDate(m?.startDate),
+    expires: formatDate(m?.endDate),
+    duesPaid: m?.duesAmount ? `₹${m.duesAmount}` : '—',
+    benefits: m?.planName === 'Platinum' ? [
+      '15% Ticket Discounts',
+      '10% Merchandise Discounts',
+      '5 days Renewal Reminder'
+    ] : m?.planName === 'Gold' ? [
+      '8% Ticket Discounts',
+      '5% Merchandise Discounts',
+      '10 days Renewal Reminder'
+    ] : [
+      '5% Ticket Discounts',
+      '2% Merchandise Discounts',
+      '20 days Renewal Reminder'
     ]
-  });
+  };
 
-  const isExpiringSoon = membershipDetails.status === 'ACTIVE' && true; // Mocking true for demonstration
+  const isExpiringSoon = false; // Add real logic if needed
 
-  const handleRenew = () => {
-    // Mock renewal logic
-    setMembershipDetails(prev => ({
-      ...prev,
-      status: 'ACTIVE',
-      expires: 'Dec 31, 2027',
-      started: prev.expires, // New term starts after current expires
-    }));
-    addToast('Membership Renewed', 'Your membership has been renewed for another year!', 'success');
+  const handlePay = async () => {
+    try {
+      setLoading(true);
+      await api('/memberships/my/pay', { method: 'POST' });
+      await refreshUser();
+      addToast('Payment Successful', 'Your membership is now active!', 'success');
+    } catch (err) {
+      addToast('Payment Failed', err.message, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -54,7 +71,7 @@ export default function MemberMembershipPage() {
               <h3>Membership Expiring Soon!</h3>
               <p>Your {membershipDetails.type} membership expires on <strong>{membershipDetails.expires}</strong>. Renew now to avoid losing access to your benefits.</p>
             </div>
-            <button className="btn-primary" onClick={handleRenew}>Renew Now</button>
+            <button className="btn-primary" disabled={loading}>Renew Now</button>
           </div>
         )}
 
@@ -65,8 +82,8 @@ export default function MemberMembershipPage() {
             <div className="details-list">
               <div className="detail-row">
                 <span className="detail-label">Status</span>
-                <span className={`detail-value ${membershipDetails.status === 'ACTIVE' ? 'status-active' : 'status-expired'}`}>
-                  {membershipDetails.status}
+                <span className={`detail-value ${membershipDetails.status === 'ACTIVE' ? 'status-active' : membershipDetails.status === 'PENDING' ? 'status-pending' : membershipDetails.status === 'EXPIRED' ? 'status-expired' : ''}`}>
+                  {membershipDetails.status === 'AWAITING_APPROVAL' ? '-' : membershipDetails.status}
                 </span>
               </div>
               <div className="detail-row">
@@ -88,9 +105,23 @@ export default function MemberMembershipPage() {
             </div>
             
             <div className="panel-actions">
-              <button className="btn-outline-green w-100" onClick={handleRenew}>
-                {membershipDetails.status === 'ACTIVE' ? 'Extend Membership' : 'Renew Membership'}
-              </button>
+              {membershipDetails.status === 'PENDING' ? (
+                <button className="btn-primary w-100" onClick={handlePay} disabled={loading}>
+                  {loading ? 'Processing...' : 'Pay Now'}
+                </button>
+              ) : membershipDetails.status === 'ACTIVE' ? (
+                <button className="btn-outline-green w-100" disabled>
+                  Membership Active
+                </button>
+              ) : membershipDetails.status === 'AWAITING_APPROVAL' ? (
+                <button className="btn-outline-green w-100" disabled>
+                  Waiting for Approval
+                </button>
+              ) : (
+                <button className="btn-outline-green w-100" disabled>
+                  No Membership Request Found
+                </button>
+              )}
             </div>
           </section>
 

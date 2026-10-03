@@ -105,7 +105,8 @@ export function AppProvider({ children }) {
   // URL Hash Sync for standard browser navigation & bookmarking
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = (window.location.hash.replace('#', '') || 'home').replace(/^\/+/, '');
+      let hash = (window.location.hash.replace('#', '') || 'home').replace(/^\/+/, '');
+      hash = hash.split('?')[0]; // Strip query parameters for routing purposes
       const parts = hash.split('/').filter(Boolean);
       const page = parts[0] || 'home';
       const paramId = parts[1] || null;
@@ -148,6 +149,15 @@ export function AppProvider({ children }) {
       const section = params.section || 'dashboard';
       hash = params.id ? `admin/${section}/${params.id}` : `admin/${section}`;
     }
+    
+    const queryParams = { ...params };
+    delete queryParams.id;
+    delete queryParams.section;
+    if (Object.keys(queryParams).length > 0) {
+      const searchParams = new URLSearchParams(queryParams);
+      hash += `?${searchParams.toString()}`;
+    }
+
     window.location.hash = hash;
   };
 
@@ -389,12 +399,22 @@ export function AppProvider({ children }) {
 
   const memberSavings = regularSubtotal - cartSubtotal;
 
+  const refreshUser = async () => {
+    try {
+      const { data } = await api('/auth/me');
+      setUser(toSessionUser(data));
+    } catch {
+      setUser(null);
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
         currentRoute,
         navigate,
         user,
+        refreshUser,
         authReady,
         signIn,
         signUp,

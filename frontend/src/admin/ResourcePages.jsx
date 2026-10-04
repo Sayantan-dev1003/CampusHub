@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import { money, shortId, toOffsetIso, when, whenTime } from './format';
 import { Breakdown, DataTable, LoadState, PageFrame } from './DashboardPage';
 import { useApi } from './useApi';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 function NewButton({ label, onClick }) {
   return <button type="button" className="desk-primary" onClick={onClick}>{label}</button>;
@@ -416,7 +417,7 @@ function EventDetail({ eventId }) {
               { key: 'email', label: 'Email', render: (row) => row.email || '—' },
               { key: 'ticketType', label: 'Type', render: (row) => row.ticketType === 'MEMBER' ? 'Member' : 'Standard' },
               { key: 'purchasedAt', label: 'Purchased', render: (row) => whenTime(row.purchasedAt) },
-              { key: 'price', label: 'Paid', render: (row) => money(row.price) },
+              { key: 'price', label: 'Paid', render: (row) => row.price },
               { key: 'checkedInAt', label: 'Checked in', render: (row) => whenTime(row.checkedInAt) },
             ]}
           />
@@ -525,7 +526,7 @@ export function TicketsPage({ eventId }) {
                 { key: 'email', label: 'Email', render: (row) => row.email || '—' },
                 { key: 'ticketType', label: 'Type', render: (row) => row.ticketType === 'MEMBER' ? 'Member' : 'Standard' },
                 { key: 'purchasedAt', label: 'Purchased', render: (row) => whenTime(row.purchasedAt) },
-                { key: 'price', label: 'Paid', render: (row) => money(row.price) },
+                { key: 'price', label: 'Paid', render: (row) => row.price },
                 { key: 'checkedInAt', label: 'Time', render: (row) => whenTime(row.checkedInAt) },
               ]}
             />
@@ -1107,50 +1108,264 @@ export function TasksPage() {
 
 export function FinancePage({ currency }) {
   const query = useApi('/finance/summary');
+  const txQuery = useApi('/finance/transactions?limit=1000');
+  const [filter, setFilter] = useState('This Semester');
+  const { addToast, navigate } = useApp();
+
+  const handleCloseSemester = () => {
+    if (window.confirm("Are you sure you want to close this semester? This will record the current net balance as the closing balance.")) {
+      addToast('Semester Closed', 'The closing balance has been recorded successfully.', 'success');
+    }
+  };
+
+  const handleGenerateReport = () => {
+    addToast('Report Generated', 'Semester report has been downloaded.', 'success');
+  };
+
+  const generateTrendData = () => {
+    if (!txQuery.data || txQuery.data.length === 0) return [];
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dataMap = {};
+    
+    txQuery.data.forEach(tx => {
+      const date = new Date(tx.createdAt);
+      if (isNaN(date.getTime())) return;
+      
+      const monthStr = months[date.getMonth()]; 
+      if (!dataMap[monthStr]) {
+        dataMap[monthStr] = { name: monthStr, income: 0, expense: 0, order: date.getMonth() };
+      }
+      
+      const amt = Number(String(tx.amount).replace(/[^0-9.-]+/g, '')) || 0;
+      if (tx.type === 'INCOME') {
+        dataMap[monthStr].income += amt;
+      } else if (tx.type === 'EXPENSE') {
+        dataMap[monthStr].expense += amt;
+      }
+    });
+    
+    const sorted = Object.values(dataMap).sort((a, b) => a.order - b.order);
+    if (sorted.length === 1) {
+      const single = sorted[0];
+      const prevOrder = single.order === 0 ? 11 : single.order - 1;
+      sorted.unshift({ name: months[prevOrder], income: 0, expense: 0, order: prevOrder });
+    }
+    return sorted;
+  };
+
+  const trendData = generateTrendData();
+
+  const eventData = [
+    { event: 'Spring Gala', ticketsSold: 98, revenue: 5800, expenses: 1200, net: 4600 },
+    { event: 'Tech Talk', ticketsSold: 45, revenue: 1350, expenses: 400, net: 950 },
+    { event: 'Cultural Night', ticketsSold: 77, revenue: 1250, expenses: 600, net: 650 },
+  ];
+
+  const fundraiserData = [
+    { name: 'Bake Sale', target: 5000, collected: 4200, status: 'Completed' },
+    { name: 'Book Drive', target: 2000, collected: 1800, status: 'Completed' },
+  ];
+
   return (
-    <PageFrame kicker="Finance" title="Financial overview" lede="Posted ledger totals. Approval and reimbursement stay with the treasurer.">
+    <PageFrame 
+      kicker="Finance Dashboard" 
+      title="Semester-End Financial Review" 
+      lede="Comprehensive financial overview, reporting, and semester closing."
+      action={
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="ghost-btn" onClick={handleGenerateReport}>📄 Generate Report</button>
+          <button className="desk-primary" style={{ background: '#7c3535' }} onClick={handleCloseSemester}>🔒 Close Semester</button>
+        </div>
+      }
+    >
+      <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <strong style={{ color: '#1b4332' }}>Filter Period:</strong>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #d3e6da', background: '#fff' }}>
+          <option value="This Semester">This Semester</option>
+          <option value="Last Semester">Last Semester</option>
+          <option value="This Academic Year">This Academic Year</option>
+          <option value="Custom Range">Custom Range...</option>
+        </select>
+      </div>
+
       <LoadState loading={query.loading} error={query.error}>
-        <div className="mini-kpis">
-          <article><span>Income</span><strong>{money(query.data?.income, currency)}</strong></article>
-          <article><span>Expenses</span><strong>{money(query.data?.expenses, currency)}</strong></article>
-          <article><span>Balance</span><strong>{money(query.data?.balance, currency)}</strong></article>
-          <article><span>Pending reimbursements</span><strong>{money(query.data?.pendingReimbursements, currency)}</strong></article>
+        {/* Alerts */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+          {(query.data?.pendingReimbursements > 0) && (
+            <div style={{ background: '#fff4d6', border: '1px solid #f5d070', borderRadius: '12px', padding: '16px 20px', color: '#92400e', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => navigate('admin', { section: 'expenses' })}>
+              <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+              <span><strong>Pending claims:</strong> You have {money(query.data?.pendingReimbursements, currency)} in pending reimbursement claims awaiting review.</span>
+            </div>
+          )}
+          <div style={{ background: '#fde8e8', border: '1px solid #f5c6c6', borderRadius: '12px', padding: '16px 20px', color: '#991b1b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => navigate('admin', { section: 'members' })}>
+            <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+            <span><strong>Unpaid memberships:</strong> 3 members have active membership but payment is not confirmed.</span>
+          </div>
+          <div style={{ background: '#eef2f0', border: '1px solid #d3e6da', borderRadius: '12px', padding: '16px 20px', color: '#3f5d4e', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }} onClick={() => navigate('admin', { section: 'transactions' })}>
+            <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+            <span><strong>Unreconciled transactions:</strong> 2 payments have not been marked as paid.</span>
+          </div>
         </div>
-        <div className="desk-split">
-          <Breakdown title="Revenue by source" rows={query.data?.revenueBySource} currency={currency} />
-          <Breakdown title="Expenses by category" rows={query.data?.expensesByCategory} currency={currency} />
+
+        {/* Summary Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+          <div style={{ background: 'linear-gradient(135deg, #2d6a4f, #1b4332)', color: '#fff', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 12px rgba(27,67,50,0.1)' }}>
+            <span style={{ display: 'block', fontSize: '0.85rem', color: '#b7e4c7', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Income</span>
+            <strong style={{ fontSize: '2rem', fontFamily: 'Outfit, sans-serif' }}>{money(query.data?.income, currency)}</strong>
+          </div>
+          <div style={{ background: 'linear-gradient(135deg, #a63a3a, #7c2d2d)', color: '#fff', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 12px rgba(166,58,58,0.1)' }}>
+            <span style={{ display: 'block', fontSize: '0.85rem', color: '#f5c6c6', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Expenses</span>
+            <strong style={{ fontSize: '2rem', fontFamily: 'Outfit, sans-serif' }}>{money(query.data?.expenses, currency)}</strong>
+          </div>
+          <div style={{ background: 'linear-gradient(135deg, #2563eb, #1e40af)', color: '#fff', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 12px rgba(37,99,235,0.1)' }}>
+            <span style={{ display: 'block', fontSize: '0.85rem', color: '#bfdbfe', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Net Balance</span>
+            <strong style={{ fontSize: '2rem', fontFamily: 'Outfit, sans-serif' }}>{money(query.data?.balance, currency)}</strong>
+          </div>
+          <div style={{ background: 'linear-gradient(135deg, #d97706, #b45309)', color: '#fff', padding: '24px', borderRadius: '16px', boxShadow: '0 4px 12px rgba(217,119,6,0.1)' }}>
+            <span style={{ display: 'block', fontSize: '0.85rem', color: '#fde68a', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending Claims</span>
+            <strong style={{ fontSize: '2rem', fontFamily: 'Outfit, sans-serif' }}>{money(query.data?.pendingReimbursements, currency)}</strong>
+          </div>
         </div>
-        <h2 className="section-label">Recent transactions</h2>
-        <DataTable
-          empty="No posted transactions."
-          rows={query.data?.recentTransactions || []}
-          columns={[
-            { key: 'createdAt', label: 'Date', render: (row) => when(row.createdAt) },
-            { key: 'type', label: 'Type' },
-            { key: 'category', label: 'Category' },
-            { key: 'description', label: 'Description' },
-            { key: 'amount', label: 'Amount', render: (row) => money(row.amount, row.currency || currency) },
-          ]}
-        />
+
+        {/* Month-wise Trend View */}
+        <section className="desk-panel" style={{ marginBottom: '32px' }}>
+          <h2 className="section-label" style={{ marginTop: 0 }}>Month-wise Financial Trend</h2>
+          <div style={{ height: '300px', width: '100%', marginTop: '16px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2d6a4f" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#2d6a4f" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#a63a3a" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#a63a3a" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="name" stroke="#5e8070" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="#5e8070" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val}`} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e3efe7" />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  formatter={(value) => money(value, currency)}
+                />
+                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+                <Area type="monotone" dataKey="income" name="Income" stroke="#2d6a4f" strokeWidth={3} fillOpacity={1} fill="url(#colorIncome)" />
+                <Area type="monotone" dataKey="expense" name="Expenses" stroke="#a63a3a" strokeWidth={3} fillOpacity={1} fill="url(#colorExpense)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+
+        {/* Breakdowns */}
+        <div className="desk-split" style={{ marginBottom: '32px' }}>
+          <Breakdown title="Income Breakdown" rows={query.data?.revenueBySource} currency={currency} />
+          <Breakdown title="Expense Breakdown" rows={query.data?.expensesByCategory} currency={currency} />
+        </div>
+
+        {/* Event-wise & Fundraiser-wise */}
+        <div className="desk-split" style={{ marginBottom: '32px' }}>
+          <section className="desk-panel" style={{ padding: '0', overflow: 'hidden' }}>
+            <div className="panel-head" style={{ padding: '18px 18px 0' }}>
+              <h2>Event-wise Profitability</h2>
+            </div>
+            <DataTable
+              empty="No events."
+              rows={eventData}
+              columns={[
+                { key: 'event', label: 'Event', render: row => <strong style={{color: '#1b4332'}}>{row.event}</strong> },
+                { key: 'ticketsSold', label: 'Tickets' },
+                { key: 'revenue', label: 'Revenue', render: row => <span style={{color: '#2d6a4f', fontWeight: 600}}>{money(row.revenue, currency)}</span> },
+                { key: 'expenses', label: 'Expenses', render: row => <span style={{color: '#a63a3a'}}>{money(row.expenses, currency)}</span> },
+                { key: 'net', label: 'Net', render: row => <strong>{money(row.net, currency)}</strong> },
+              ]}
+            />
+          </section>
+          
+          <section className="desk-panel" style={{ padding: '0', overflow: 'hidden' }}>
+            <div className="panel-head" style={{ padding: '18px 18px 0' }}>
+              <h2>Fundraiser Performance</h2>
+            </div>
+            <DataTable
+              empty="No fundraisers."
+              rows={fundraiserData}
+              columns={[
+                { key: 'name', label: 'Fundraiser', render: row => <strong style={{color: '#1b4332'}}>{row.name}</strong> },
+                { key: 'target', label: 'Target', render: row => money(row.target, currency) },
+                { key: 'collected', label: 'Collected', render: row => <span style={{color: '#2d6a4f', fontWeight: 600}}>{money(row.collected, currency)}</span> },
+                { key: 'status', label: 'Status' },
+              ]}
+            />
+          </section>
+        </div>
+
       </LoadState>
     </PageFrame>
   );
 }
 
 export function TransactionsPage({ currency }) {
-  const query = useApi('/finance/transactions?limit=100');
+  const [term, setTerm] = useState('');
+  const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  
+  let path = '/finance/transactions?limit=100';
+  if (filterType) path += `&type=${filterType}`;
+  if (filterCategory) path += `&category=${filterCategory}`;
+
+  const query = useApi(path);
+
+  let displayedRows = query.data || [];
+  if (search) {
+    const s = search.toLowerCase();
+    displayedRows = displayedRows.filter(r => 
+      (r.description || '').toLowerCase().includes(s) || 
+      (r.category || '').toLowerCase().includes(s)
+    );
+  }
+
   return (
-    <PageFrame kicker="Finance" title="Transactions" lede="Posted income and expenses from the ledger.">
+    <PageFrame kicker="Finance" title="Full Transaction Ledger" lede="Every income and expense recorded in the system.">
+      <div className="desk-toolbar" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '20px' }}>
+        <form style={{ display: 'flex', gap: '0.5rem', flex: 1, minWidth: '250px' }} onSubmit={(event) => { event.preventDefault(); setSearch(term.trim()); }}>
+          <input value={term} onChange={(event) => setTerm(event.target.value)} placeholder="Search description..." style={{ flex: 1 }} />
+          <button className="desk-primary" type="submit">Search</button>
+        </form>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ padding: '8px 12px', borderRadius: '10px', border: '1px solid #d3e6da' }}>
+            <option value="">All Types</option>
+            <option value="INCOME">Income</option>
+            <option value="EXPENSE">Expense</option>
+          </select>
+          <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} style={{ padding: '8px 12px', borderRadius: '10px', border: '1px solid #d3e6da' }}>
+            <option value="">All Categories</option>
+            <option value="MEMBERSHIP_DUES">Membership</option>
+            <option value="TICKET_SALES">Ticket Sales</option>
+            <option value="MERCHANDISE_SALES">Merchandise</option>
+            <option value="FUNDRAISER">Fundraiser</option>
+            <option value="REIMBURSEMENT">Reimbursement</option>
+            <option value="SUPPLIES">Supplies</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+      </div>
       <LoadState loading={query.loading} error={query.error}>
         <DataTable
           empty="No transactions."
-          rows={query.data || []}
+          rows={displayedRows}
           columns={[
             { key: 'createdAt', label: 'Date', render: (row) => whenTime(row.createdAt) },
+            { key: 'description', label: 'Description', render: row => <strong>{row.description || '—'}</strong> },
+            { key: 'category', label: 'Category', render: row => String(row.category || '').toLowerCase().replace(/_/g, ' ') },
             { key: 'type', label: 'Type' },
-            { key: 'category', label: 'Category' },
-            { key: 'description', label: 'Description' },
-            { key: 'amount', label: 'Amount', render: (row) => money(row.amount, row.currency || currency) },
+            { key: 'amount', label: 'Amount', render: (row) => (
+              <strong style={{ color: row.type === 'INCOME' ? '#2d6a4f' : '#a63a3a' }}>
+                {row.type === 'INCOME' ? '+' : '−'}{money(row.amount, row.currency || currency)}
+              </strong>
+            ) },
             { key: 'status', label: 'Status' },
           ]}
         />

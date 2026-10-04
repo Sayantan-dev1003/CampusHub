@@ -6,7 +6,6 @@ import { useApi } from './useApi';
 
 const ACTIONS = [
   { section: 'events', id: 'new', label: 'Create event', icon: CalendarPlus },
-  { section: 'members', id: 'new', label: 'Add member', icon: UserRound },
   { section: 'products', id: 'new', label: 'Add product', icon: Package },
   { section: 'announcements', id: 'new', label: 'Create announcement', icon: Megaphone },
   { section: 'initiatives', id: 'new', label: 'Create initiative', icon: Flag },
@@ -48,6 +47,17 @@ export default function DashboardPage({ currency }) {
     ['Low stock products', data.lowStockCount, Boxes],
   ];
 
+  const cardStyles = [
+    { bg: 'linear-gradient(135deg, #e0e7ff, #c7d2fe)', color: '#3730a3', iconBg: '#a5b4fc', text: '#312e81' },
+    { bg: 'linear-gradient(135deg, #d1fae5, #a7f3d0)', color: '#065f46', iconBg: '#6ee7b7', text: '#064e3b' },
+    { bg: 'linear-gradient(135deg, #f3e8ff, #e9d5ff)', color: '#5b21b6', iconBg: '#d8b4fe', text: '#4c1d95' },
+    { bg: 'linear-gradient(135deg, #ffedd5, #fed7aa)', color: '#9a3412', iconBg: '#fdba74', text: '#7c2d12' },
+    { bg: 'linear-gradient(135deg, #fce7f3, #fbcfe8)', color: '#9d174d', iconBg: '#f9a8d4', text: '#831843' },
+    { bg: 'linear-gradient(135deg, #fef3c7, #fde68a)', color: '#b45309', iconBg: '#fcd34d', text: '#92400e' },
+    { bg: 'linear-gradient(135deg, #fee2e2, #fecaca)', color: '#991b1b', iconBg: '#fca5a5', text: '#7f1d1d' },
+    { bg: 'linear-gradient(135deg, #ccfbf1, #99f6e4)', color: '#115e59', iconBg: '#5eead4', text: '#134e4a' },
+  ];
+
   return (
     <div className="desk-page">
       <header className="desk-page-head">
@@ -58,23 +68,49 @@ export default function DashboardPage({ currency }) {
         </div>
       </header>
 
-      <section className="kpi-grid">
-        {cards.map(([label, value, Icon]) => (
-          <article key={label} className="kpi-card">
-            <span className="kpi-ico" aria-hidden="true"><Icon size={18} /></span>
-            <span>{label}</span>
-            <strong>{count(value)}</strong>
-          </article>
-        ))}
+      <section className="kpi-grid" style={{ gap: '20px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: '32px' }}>
+        {cards.map(([label, value, Icon], idx) => {
+          const style = cardStyles[idx % cardStyles.length];
+          return (
+            <article key={label} className="kpi-card" style={{ 
+              background: style.bg, 
+              color: style.text, 
+              border: 'none', 
+              boxShadow: '0 8px 16px rgba(0,0,0,0.06)',
+              borderRadius: '16px',
+              padding: '24px',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+              overflow: 'hidden',
+              transition: 'transform 0.2s ease-in-out'
+            }} onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', position: 'relative', zIndex: 2 }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+                <span className="kpi-ico" aria-hidden="true" style={{ background: style.iconBg, color: style.color, padding: '10px', borderRadius: '12px' }}>
+                  <Icon size={20} />
+                </span>
+              </div>
+              <strong style={{ fontSize: '2.5rem', fontFamily: 'Outfit, sans-serif', fontWeight: 700, position: 'relative', zIndex: 2 }}>{count(value)}</strong>
+              <div style={{ position: 'absolute', right: '-20px', bottom: '-20px', width: '120px', height: '120px', background: style.color, opacity: 0.05, borderRadius: '50%', zIndex: 1 }} />
+            </article>
+          );
+        })}
       </section>
 
-
-      <section className="action-row" aria-label="Quick actions">
+      <section className="action-row" aria-label="Quick actions" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '32px' }}>
         {ACTIONS.map((action) => {
           const Icon = action.icon;
           return (
-            <button key={action.label} type="button" onClick={() => go(action.section, action.id)}>
-              <Icon size={16} />
+            <button key={action.label} type="button" onClick={() => go(action.section, action.id)} style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '14px 24px',
+              background: 'linear-gradient(135deg, #1b4332, #2d6a4f)',
+              color: '#fff', border: 'none', borderRadius: '12px',
+              fontWeight: 600, fontSize: '0.95rem',
+              boxShadow: '0 4px 12px rgba(45, 106, 79, 0.2)',
+              cursor: 'pointer', transition: 'all 0.2s ease-in-out'
+            }} onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(45, 106, 79, 0.3)'; }} onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(45, 106, 79, 0.2)'; }}>
+              <Icon size={18} />
               {action.label}
             </button>
           );

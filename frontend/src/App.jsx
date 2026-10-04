@@ -26,6 +26,7 @@ import MemberCheckoutPage from './pages/member/MemberCheckoutPage';
 import MemberOrdersPage from './pages/member/MemberOrdersPage';
 import MemberAnnouncementsPage from './pages/member/MemberAnnouncementsPage';
 import MemberVolunteerPage from './pages/member/MemberVolunteerPage';
+import MemberExpensesPage from './pages/member/MemberExpensesPage';
 import MemberNotificationsPage from './pages/member/MemberNotificationsPage';
 import MemberLayout from './pages/member/MemberLayout';
 
@@ -76,6 +77,8 @@ function AppContent() {
         return <MemberAnnouncementsPage />;
       case 'member-volunteer':
         return <MemberVolunteerPage />;
+      case 'member-expenses':
+        return <MemberExpensesPage />;
       case 'member-notifications':
         return <MemberNotificationsPage />;
       default:

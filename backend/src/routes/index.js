@@ -278,8 +278,8 @@ router.get('/tasks/my', requireAuth, requireVolunteer, asyncHandler(async (req, 
 
 router.post('/finance/expenses', requireAuth, requireExpenseSubmit, maybeSingle('receipt'), asyncHandler(async (req, res) => {
   const amount = Number(req.body.amount);
-  if (!req.body.category || !req.body.description || !Number.isFinite(amount) || amount <= 0) {
-    throw new ApiError(400, 'Amount, category, and description are required', 'VALIDATION_ERROR');
+  if (!req.body.category || !req.body.description || !req.body.title || !Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, 'Title, amount, category, and description are required', 'VALIDATION_ERROR');
   }
   let receiptUrl;
   if (req.file) {
@@ -287,6 +287,7 @@ router.post('/finance/expenses', requireAuth, requireExpenseSubmit, maybeSingle(
     receiptUrl = stored.storagePath;
   }
   sendData(res, await finance.submitExpense(req.user, {
+    title: req.body.title,
     amount,
     category: req.body.category,
     description: req.body.description,
@@ -301,13 +302,14 @@ router.get('/finance/expenses', requireAuth, asyncHandler(async (req, res) => {
   sendList(res, result.data, result.meta);
 }));
 router.post('/finance/expenses/:expenseId/approve', requireAuth, treasurer, asyncHandler(async (req, res) => {
-  sendData(res, await finance.review(req.params.expenseId, req.user.id, 'APPROVED'), 'Expense approved');
+  sendData(res, await finance.review(req.params.expenseId, req.user.id, 'APPROVED', req.body.note), 'Expense approved');
 }));
 router.post('/finance/expenses/:expenseId/reject', requireAuth, treasurer, asyncHandler(async (req, res) => {
-  sendData(res, await finance.review(req.params.expenseId, req.user.id, 'REJECTED'), 'Expense rejected');
+  if (!req.body.note) throw new ApiError(400, 'Rejection reason is required', 'VALIDATION_ERROR');
+  sendData(res, await finance.review(req.params.expenseId, req.user.id, 'REJECTED', req.body.note), 'Expense rejected');
 }));
 router.post('/finance/expenses/:expenseId/reimburse', requireAuth, treasurer, asyncHandler(async (req, res) => {
-  sendData(res, await finance.reimburse(req.params.expenseId, req.user.id), 'Expense reimbursed');
+  sendData(res, await finance.reimburse(req.params.expenseId, req.user.id, req.body.reimbursementMode, req.body.transactionRef), 'Expense reimbursed');
 }));
 router.post('/finance/income', requireAuth, treasurer, validateBody(schemas.incomeSchema), asyncHandler(async (req, res) => {
   sendData(res, await finance.recordIncome(req.user.id, req.body), 'Income recorded', 201);

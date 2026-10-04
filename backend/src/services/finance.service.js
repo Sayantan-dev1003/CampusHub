@@ -12,11 +12,16 @@ function serializeExpense(expense) {
     submittedById: expense.submittedById,
     submitterName: expense.submitter?.name,
     initiativeId: expense.initiativeId,
+    title: expense.title,
     category: expense.category,
     description: expense.description,
     amount: money(expense.amount),
     receiptUrl: expense.receiptUrl,
     status: expense.status,
+    adminNote: expense.adminNote,
+    rejectionReason: expense.rejectionReason,
+    reimbursementMode: expense.reimbursementMode,
+    transactionRef: expense.transactionRef,
     approvedById: expense.approvedById,
     reviewedAt: expense.reviewedAt,
     reimbursedAt: expense.reimbursedAt,
@@ -60,6 +65,7 @@ async function submitExpense(user, input, receiptUrl) {
         data: {
           submittedById: user.id,
           initiativeId: input.initiativeId,
+          title: input.title || 'Expense Claim',
           category: input.category,
           description: input.description,
           amount: input.amount,
@@ -97,6 +103,7 @@ async function submitExpense(user, input, receiptUrl) {
     data: {
       submittedById: user.id,
       initiativeId: input.initiativeId,
+      title: input.title || 'Expense Claim',
       category: input.category,
       description: input.description,
       amount: input.amount,
@@ -105,11 +112,28 @@ async function submitExpense(user, input, receiptUrl) {
     },
     include: { submitter: true },
   });
+
+  // Notify treasurers and admins
+  const staff = await prisma.user.findMany({
+    where: { role: { in: ['TREASURER', 'ADMIN'] } },
+    select: { id: true },
+  });
+  for (const s of staff) {
+    await notify(prisma, {
+      userId: s.id,
+      title: 'New Expense Claim',
+      message: `${user.name || 'A user'} submitted a new expense claim for ${input.amount}.`,
+      type: 'SYSTEM',
+      referenceType: 'EXPENSE',
+      referenceId: expense.id,
+    });
+  }
+
   return presentExpense(expense);
 }
 
 function mapExpenseCategory(category) {
-  const allowed = ['EVENT_COST', 'SUPPLIES', 'REIMBURSEMENT', 'OTHER'];
+  const allowed = ['EVENT_COST', 'SUPPLIES', 'REIMBURSEMENT', 'TRANSPORT', 'PRINTING', 'FOOD', 'OTHER'];
   const normalized = String(category || '').toUpperCase();
   return allowed.includes(normalized) ? normalized : 'OTHER';
 }
@@ -133,19 +157,30 @@ async function listExpenses(user, query) {
   return { data: await Promise.all(rows.map(presentExpense)), meta: { page, limit, total } };
 }
 
-async function review(expenseId, reviewerId, status) {
+async function review(expenseId, reviewerId, status, note) {
   const expense = await prisma.expense.findUnique({ where: { id: expenseId }, include: { submitter: true } });
   if (!expense) throw new ApiError(404, 'Expense not found', 'NOT_FOUND');
   if (expense.status !== 'PENDING') throw new ApiError(409, 'Only pending expenses can be reviewed', 'CONFLICT');
   const updated = await prisma.expense.update({
     where: { id: expenseId },
-    data: { status, approvedById: reviewerId, reviewedAt: new Date() },
+    data: { 
+      status, 
+      approvedById: reviewerId, 
+      reviewedAt: new Date(),
+      rejectionReason: status === 'REJECTED' ? note : null,
+      adminNote: status === 'APPROVED' ? note : null
+    },
     include: { submitter: true },
   });
+  
+  let msg = `Your expense claim was ${status.toLowerCase()}.`;
+  if (status === 'REJECTED' && note) msg = `Your expense claim was rejected. Reason: ${note}`;
+  if (status === 'APPROVED' && note) msg = `Your expense claim was approved. Note: ${note}`;
+
   await notify(prisma, {
     userId: expense.submittedById,
     title: `Expense ${status.toLowerCase()}`,
-    message: `Your expense claim was ${status.toLowerCase()}.`,
+    message: msg,
     type: 'EXPENSE',
     referenceType: 'EXPENSE',
     referenceId: expense.id,
@@ -153,7 +188,7 @@ async function review(expenseId, reviewerId, status) {
   return presentExpense(updated);
 }
 
-async function reimburse(expenseId, reviewerId) {
+async function reimburse(expenseId, reviewerId, reimbursementMode, transactionRef) {
   const settings = await getOrganization();
   const updated = await prisma.runTransaction(async (tx) => {
     const expense = await tx.expense.findUnique({ where: { id: expenseId }, include: { submitter: true } });
@@ -178,9 +213,11 @@ async function reimburse(expenseId, reviewerId) {
       where: { id: expenseId },
       data: {
         status: 'REIMBURSED',
-        approvedById: expense.approvedById || reviewerId,
         reimbursedAt: new Date(),
         transactionId: transaction.id,
+        reimbursementMode,
+        transactionRef,
+        approvedById: expense.approvedById || reviewerId,
       },
       include: { submitter: true },
     });

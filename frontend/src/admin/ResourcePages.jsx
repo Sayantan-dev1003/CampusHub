@@ -1160,7 +1160,42 @@ export function TransactionsPage({ currency }) {
 }
 
 export function ExpensesPage({ currency }) {
+  const { addToast } = useApp();
   const query = useApi('/finance/expenses?limit=100');
+  const [busy, setBusy] = useState('');
+
+  const processExpense = async (id, action, payload = {}) => {
+    setBusy(id);
+    try {
+      await api(`/finance/expenses/${id}/${action}`, { method: 'POST', body: payload });
+      addToast('Expense updated', action, 'success');
+      query.reload();
+    } catch (err) {
+      addToast('Error', err.message, 'error');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const handleApprove = (id) => {
+    const note = window.prompt('Optional Note (e.g. Will reimburse by Friday):');
+    processExpense(id, 'approve', note ? { note } : {});
+  };
+
+  const handleReject = (id) => {
+    const note = window.prompt('Please enter a rejection reason:');
+    if (note) {
+      processExpense(id, 'reject', { note });
+    }
+  };
+
+  const handleReimburse = (id) => {
+    const mode = window.prompt('Reimbursement Mode (e.g., BANK_TRANSFER, CASH):', 'BANK_TRANSFER');
+    if (!mode) return;
+    const ref = window.prompt('Transaction Reference (optional):', '');
+    processExpense(id, 'reimburse', { reimbursementMode: mode, transactionRef: ref });
+  };
+
   return (
     <PageFrame kicker="Finance" title="Expenses" lede="Claims submitted for review.">
       <LoadState loading={query.loading} error={query.error}>
@@ -1168,12 +1203,33 @@ export function ExpensesPage({ currency }) {
           empty="No expenses."
           rows={query.data || []}
           columns={[
-            { key: 'description', label: 'Description' },
+            { key: 'description', label: 'Expense', render: (row) => (
+              <div>
+                <div style={{ fontWeight: 600 }}>{row.title}</div>
+                <div style={{ fontSize: '0.85rem', color: '#5e8070' }}>{row.description}</div>
+                {row.receiptUrl && <a href={row.receiptUrl} target="_blank" rel="noreferrer" style={{ fontSize: '0.8rem', color: '#2d6a4f' }}>View Receipt</a>}
+                {row.rejectionReason && <div style={{ fontSize: '0.8rem', color: '#991b1b', marginTop: 4 }}>Rejected: {row.rejectionReason}</div>}
+                {row.reimbursementMode && <div style={{ fontSize: '0.8rem', color: '#5e8070', marginTop: 4 }}>Paid via {row.reimbursementMode} {row.transactionRef && `(${row.transactionRef})`}</div>}
+              </div>
+            ) },
             { key: 'category', label: 'Category' },
             { key: 'submitterName', label: 'Submitted by', render: (row) => row.submitterName || '—' },
             { key: 'amount', label: 'Amount', render: (row) => money(row.amount, currency) },
             { key: 'status', label: 'Status' },
             { key: 'createdAt', label: 'Date', render: (row) => when(row.createdAt) },
+            { key: 'actions', label: 'Actions', render: (row) => (
+              <div className="row-actions">
+                {row.status === 'PENDING' && (
+                  <>
+                    <button type="button" className="ghost-btn" disabled={busy === row.id} onClick={() => handleApprove(row.id)}>Approve</button>
+                    <button type="button" className="ghost-btn" disabled={busy === row.id} onClick={() => handleReject(row.id)} style={{ color: '#991b1b' }}>Reject</button>
+                  </>
+                )}
+                {row.status === 'APPROVED' && (
+                  <button type="button" className="desk-primary" disabled={busy === row.id} onClick={() => handleReimburse(row.id)} style={{ padding: '6px 10px' }}>Mark Reimbursed</button>
+                )}
+              </div>
+            ) }
           ]}
         />
       </LoadState>

@@ -254,6 +254,9 @@ router.get('/initiatives', requireAuth, requireAdminOrVolunteer, asyncHandler(as
 router.get('/initiatives/:initiativeId', requireAuth, requireAdminOrVolunteer, asyncHandler(async (req, res) => {
   sendData(res, await initiatives.getOne(req.params.initiativeId, req.user));
 }));
+router.patch('/initiatives/:initiativeId/status', requireAuth, admin, validateBody(schemas.initiativeStatusSchema), asyncHandler(async (req, res) => {
+  sendData(res, await initiatives.updateStatus(req.params.initiativeId, req.body.status), 'Initiative status updated');
+}));
 router.post('/initiatives/:initiativeId/tasks', requireAuth, admin, validateBody(schemas.taskSchema), asyncHandler(async (req, res) => {
   const data = { ...req.body };
   if (data.dueDate) data.dueDate = new Date(data.dueDate);

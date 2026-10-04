@@ -840,6 +840,8 @@ export function InitiativesPage({ mode }) {
   const { navigate } = useApp();
   const query = useApi(mode === 'new' ? null : '/initiatives', mode !== 'new');
   if (mode === 'new') return <InitiativeForm />;
+  if (mode && mode !== 'new') return <InitiativeDetail initiativeId={mode} />;
+  
   const rows = (query.data || []).map((item) => ({
     ...item,
     done: item.taskCounts?.DONE || 0,
@@ -857,7 +859,7 @@ export function InitiativesPage({ mode }) {
           empty="No initiatives."
           rows={rows}
           columns={[
-            { key: 'name', label: 'Name' },
+            { key: 'name', label: 'Name', render: (row) => <button type="button" className="linkish" onClick={() => navigate('admin', { section: 'initiatives', id: row.id })}>{row.name}</button> },
             { key: 'type', label: 'Type' },
             { key: 'status', label: 'Status' },
             { key: 'done', label: 'Completed tasks' },
@@ -918,6 +920,159 @@ function InitiativeForm() {
         {error && <p className="desk-error">{error}</p>}
         <button className="desk-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Create initiative'}</button>
       </form>
+    </PageFrame>
+  );
+}
+
+function InitiativeDetail({ initiativeId }) {
+  const { addToast } = useApp();
+  const query = useApi(`/initiatives/${initiativeId}`);
+  const membersQuery = useApi('/members?role=MEMBER&limit=100');
+  const [taskForm, setTaskForm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  
+  const initiative = query.data;
+  
+  const updateStatus = async (status) => {
+    try {
+      await api(`/initiatives/${initiativeId}/status`, { method: 'PATCH', body: { status } });
+      addToast('Status updated', status, 'success');
+      query.reload();
+    } catch (err) {
+      addToast('Error', err.message, 'error');
+    }
+  };
+
+  const assignTask = async (taskId, assignedTo) => {
+    try {
+      await api(`/tasks/${taskId}/assign`, { method: 'PATCH', body: { assignedTo } });
+      addToast('Task assigned', '', 'success');
+      query.reload();
+    } catch (err) {
+      addToast('Error', err.message, 'error');
+    }
+  };
+  
+  const recordRevenue = async (event) => {
+    event.preventDefault();
+    const amount = Number(event.target.elements.amount.value);
+    if (!amount) return;
+    try {
+      await api('/finance/income', { method: 'POST', body: { amount, category: 'FUNDRAISER', initiativeId, description: `Revenue for ${initiative?.name}` } });
+      addToast('Revenue recorded', money(amount), 'success');
+      event.target.reset();
+    } catch (err) {
+      addToast('Error', err.message, 'error');
+    }
+  };
+
+  const createTask = async (event) => {
+    event.preventDefault();
+    const form = event.target;
+    setBusy(true);
+    try {
+      await api(`/initiatives/${initiativeId}/tasks`, {
+        method: 'POST',
+        body: {
+          title: form.title.value,
+          description: form.description.value,
+          priority: form.priority.value,
+          dueDate: form.dueDate.value ? toOffsetIso(form.dueDate.value) : undefined
+        }
+      });
+      addToast('Task created', '', 'success');
+      setTaskForm(false);
+      query.reload();
+    } catch(err) {
+      addToast('Error', err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const volunteers = (membersQuery.data || []).filter(m => m.isVolunteer);
+
+  if (!initiative) return <LoadState loading={query.loading} error={query.error} />;
+
+  const doneCount = initiative.tasks?.filter(t => t.status === 'DONE').length || 0;
+  const totalCount = initiative.tasks?.length || 0;
+  const progress = totalCount === 0 ? 0 : Math.round((doneCount / totalCount) * 100);
+
+  return (
+    <PageFrame
+      kicker="Initiative"
+      title={initiative.name}
+      lede={`${initiative.type} · ${initiative.status}`}
+      action={
+        <select value={initiative.status} onChange={(e) => updateStatus(e.target.value)} style={{ padding: '8px 12px', borderRadius: '10px' }}>
+          <option value="PLANNED">Planned</option>
+          <option value="ACTIVE">Active</option>
+          <option value="COMPLETED">Completed</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
+      }
+    >
+      <div className="mini-kpis" style={{ marginBottom: '2rem' }}>
+        <article><span>Progress</span><strong>{progress}% complete</strong></article>
+        <article><span>Tasks</span><strong>{doneCount} / {totalCount} done</strong></article>
+      </div>
+
+      <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+        <div style={{ flex: 2, minWidth: '300px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 className="section-label" style={{ margin: 0 }}>Tasks</h2>
+            {!taskForm && <button className="desk-primary" style={{ padding: '4px 10px', fontSize: '0.8rem' }} onClick={() => setTaskForm(true)}>+ New Task</button>}
+          </div>
+          
+          {taskForm && (
+            <form className="desk-form" onSubmit={createTask} style={{ background: '#f5f7f6', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+              <label>Title<input name="title" required placeholder="e.g. Buy Baking Supplies" /></label>
+              <label>Description<input name="description" required placeholder="Instructions for volunteer" /></label>
+              <div className="form-row">
+                <label>Priority
+                  <select name="priority">
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                  </select>
+                </label>
+                <label>Deadline<input name="dueDate" type="datetime-local" required /></label>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                <button type="submit" className="desk-primary" disabled={busy}>Add Task</button>
+                <button type="button" className="ghost-btn" onClick={() => setTaskForm(false)}>Cancel</button>
+              </div>
+            </form>
+          )}
+
+          <DataTable
+            empty="No tasks defined yet."
+            rows={initiative.tasks || []}
+            columns={[
+              { key: 'title', label: 'Task' },
+              { key: 'status', label: 'Status' },
+              { key: 'dueDate', label: 'Deadline', render: (row) => row.dueDate ? new Date(row.dueDate).toLocaleDateString() : '—' },
+              { key: 'assign', label: 'Assigned To', render: (row) => (
+                  <select value={row.assignedToId || ''} onChange={(e) => assignTask(row.id, e.target.value)} style={{ padding: '4px' }}>
+                    <option value="">Unassigned</option>
+                    {volunteers.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+              )}
+            ]}
+          />
+        </div>
+        
+        {initiative.type === 'FUNDRAISER' && (
+          <div style={{ flex: 1, minWidth: '250px' }}>
+            <h2 className="section-label">Actual Revenue Entry</h2>
+            <form className="desk-form" onSubmit={recordRevenue} style={{ background: '#fff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e3efe7' }}>
+              <p style={{ fontSize: '0.85rem', color: '#5e8070', marginTop: 0 }}>Record actual funds collected at the event (e.g. bake sale cash box).</p>
+              <label>Amount Collected<input name="amount" type="number" min="1" required placeholder="₹0.00" /></label>
+              <button className="desk-primary" type="submit" style={{ width: '100%' }}>Record Income</button>
+            </form>
+          </div>
+        )}
+      </div>
     </PageFrame>
   );
 }

@@ -148,6 +148,10 @@ const initiativeSchema = z.object({
   status: z.enum(['PLANNED', 'ACTIVE', 'COMPLETED', 'CANCELLED']).optional(),
 });
 
+const initiativeStatusSchema = z.object({
+  status: z.enum(['PLANNED', 'ACTIVE', 'COMPLETED', 'CANCELLED']),
+});
+
 const taskSchema = z.object({
   title: z.string().trim().min(2).max(160),
   description: z.string().trim().min(1),
@@ -213,6 +217,7 @@ module.exports = {
   stockSchema,
   orderStatusSchema,
   initiativeSchema,
+  initiativeStatusSchema,
   taskSchema,
   assignSchema,
   taskPatchSchema,

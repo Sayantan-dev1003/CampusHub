@@ -117,9 +117,49 @@ async function updateTask(taskId, user, input) {
   const task = await prisma.task.update({
     where: { id: taskId },
     data: input,
-    include: { assignee: true },
+    include: { assignee: true, initiative: true },
   });
+
+  if (existing.status !== 'DONE' && task.status === 'DONE' && user.role !== 'ADMIN') {
+    const admins = await prisma.user.findMany({ where: { role: 'ADMIN' } });
+    for (const admin of admins) {
+      await notify(prisma, {
+        userId: admin.id,
+        title: 'Task Completed',
+        message: `Task "${task.title}" in "${task.initiative.name}" was completed by ${user.name}.`,
+        type: 'TASK',
+        referenceType: 'TASK',
+        referenceId: task.id,
+      });
+    }
+  }
+
   return serializeTask(task);
+}
+
+async function updateStatus(initiativeId, status) {
+  const existing = await prisma.initiative.findUnique({ where: { id: initiativeId } });
+  if (!existing) throw new ApiError(404, 'Initiative not found', 'NOT_FOUND');
+  
+  const initiative = await prisma.initiative.update({
+    where: { id: initiativeId },
+    data: { status },
+    include: { tasks: true }
+  });
+
+  const assigneeIds = [...new Set(initiative.tasks.map(t => t.assignedToId).filter(Boolean))];
+  for (const userId of assigneeIds) {
+    await notify(prisma, {
+      userId,
+      title: 'Fundraiser Status Updated',
+      message: `The fundraiser "${initiative.name}" is now ${status}.`,
+      type: 'ANNOUNCEMENT',
+      referenceType: 'INITIATIVE',
+      referenceId: initiative.id,
+    });
+  }
+
+  return serializeInitiative(initiative);
 }
 
 async function myTasks(userId) {
@@ -131,4 +171,4 @@ async function myTasks(userId) {
   return tasks.map((task) => ({ ...serializeTask(task), initiativeName: task.initiative.name }));
 }
 
-module.exports = { create, list, getOne, createTask, assignTask, updateTask, myTasks };
+module.exports = { create, list, getOne, createTask, assignTask, updateTask, myTasks, updateStatus };

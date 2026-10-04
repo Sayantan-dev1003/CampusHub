@@ -1,54 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import MemberLayout from './MemberLayout';
+import { api } from '../../services/api';
+import { useApp } from '../../context/AppContext';
 
 export default function MemberVolunteerPage() {
-  const [tasks] = useState([
-    {
-      id: 1,
-      name: 'Buy ingredients',
-      description: 'Purchase flour, sugar, and chocolate chips for the bake sale.',
-      deadline: 'Oct 05, 2026',
-      priority: 'High',
-      status: 'Completed'
-    },
-    {
-      id: 2,
-      name: 'Prepare cupcakes',
-      description: 'Bake and frost 100 chocolate cupcakes.',
-      deadline: 'Oct 06, 2026',
-      priority: 'High',
-      status: 'In Progress'
-    },
-    {
-      id: 3,
-      name: 'Manage counter',
-      description: 'Run the cash register and hand out cupcakes during the event.',
-      deadline: 'Oct 07, 2026',
-      priority: 'Medium',
-      status: 'Pending'
-    },
-    {
-      id: 4,
-      name: 'Post-event Cleanup',
-      description: 'Clean the tables and return equipment to storage.',
-      deadline: 'Oct 07, 2026',
-      priority: 'Low',
-      status: 'Pending'
+  const { addToast } = useApp();
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchTasks = async () => {
+    try {
+      const response = await api('/tasks/my');
+      setTasks(response.data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const updateStatus = async (taskId, currentStatus) => {
+    const newStatus = currentStatus === 'TODO' ? 'IN_PROGRESS' : 'DONE';
+    try {
+      await api(`/tasks/${taskId}`, { method: 'PATCH', body: { status: newStatus } });
+      addToast('Status updated', newStatus, 'success');
+      fetchTasks();
+    } catch (err) {
+      addToast('Error', err.message, 'error');
+    }
+  };
 
   const getStatusClass = (status) => {
     switch(status) {
-      case 'Completed': return 'status-completed';
-      case 'In Progress': return 'status-progress';
+      case 'DONE': return 'status-completed';
+      case 'IN_PROGRESS': return 'status-progress';
       default: return 'status-pending';
     }
   };
 
   const getPriorityClass = (priority) => {
     switch(priority) {
-      case 'High': return 'pri-high';
-      case 'Medium': return 'pri-med';
+      case 'HIGH': return 'pri-high';
+      case 'MEDIUM': return 'pri-med';
       default: return 'pri-low';
     }
   };
@@ -64,14 +61,15 @@ export default function MemberVolunteerPage() {
         <section className="dashboard-panel">
           <div className="panel-heading">
             <h2>My Tasks</h2>
-            <div className="project-badge">Fundraiser: Bake Sale</div>
           </div>
 
           <div className="tasks-table-container">
+            {loading ? <p>Loading tasks...</p> : tasks.length === 0 ? <p>No tasks assigned.</p> : (
             <table className="tasks-table">
               <thead>
                 <tr>
                   <th>Task Name</th>
+                  <th>Initiative</th>
                   <th>Priority</th>
                   <th>Deadline</th>
                   <th>Status</th>
@@ -82,21 +80,27 @@ export default function MemberVolunteerPage() {
                 {tasks.map(task => (
                   <tr key={task.id}>
                     <td>
-                      <div className="task-name">{task.name}</div>
+                      <div className="task-name">{task.title}</div>
                       <div className="task-desc">{task.description}</div>
                     </td>
+                    <td><div className="project-badge">{task.initiativeName}</div></td>
                     <td><span className={`priority-badge ${getPriorityClass(task.priority)}`}>{task.priority}</span></td>
-                    <td>{task.deadline}</td>
-                    <td><span className={`status-pill ${getStatusClass(task.status)}`}>{task.status}</span></td>
+                    <td>{task.dueDate ? new Date(task.dueDate).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                    <td><span className={`status-pill ${getStatusClass(task.status)}`}>{task.status.replace('_', ' ')}</span></td>
                     <td>
-                      <button className="btn-action" disabled={task.status === 'Completed'}>
-                        {task.status === 'Completed' ? 'Done' : 'Update'}
+                      <button 
+                        className="btn-action" 
+                        disabled={task.status === 'DONE' || task.status === 'CANCELLED'}
+                        onClick={() => updateStatus(task.id, task.status)}
+                      >
+                        {task.status === 'DONE' ? 'Done' : (task.status === 'TODO' ? 'Start' : 'Complete')}
                       </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            )}
           </div>
         </section>
       </div>
